@@ -65,7 +65,7 @@ el('mic').onclick=()=>{if(!SR)return say('이 브라우저에서는 버튼이나
 </script><script>
 const mapStatus=el('tileState'),connect=el('connectMap');
 el('roadRoute').disabled=true;
-mapStatus.textContent=location.protocol==='file:'?'등록한 웹 주소에서 열면 카카오 지도를 연결할 수 있어요.':'이 주소를 JavaScript SDK 도메인에 등록하세요. '+location.origin;
+mapStatus.textContent=location.protocol==='file:'?'등록한 웹 주소에서 열면 카카오 지도를 연결할 수 있어요.':'카카오 JavaScript 키를 입력한 뒤 지도 연결을 눌러 주세요.';
 connect.onclick=()=>{
  if(!/^https?:$/.test(location.protocol)){mapStatus.textContent='웹 서버로 열어 주세요. 예: http://localhost:8080/route-agent-demo.html';return}
  const key=el('mapKey').value.trim();if(!key){mapStatus.textContent='앱의 JavaScript 키를 입력해 주세요.';return}
