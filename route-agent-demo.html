@@ -1,96 +1,96 @@
-<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>���� �濡 �� ��� �ȳ� ����</title><style>*{box-sizing:border-box}body{margin:0;background:#eff2ec;color:#142d26;font:16px/1.65 system-ui,sans-serif}main{max-width:720px;margin:auto;padding:28px 18px}h1{font-size:36px;margin:0}section{background:white;border-radius:18px;padding:20px;margin:14px 0}button,input{font:inherit;padding:9px 13px;border:1px solid #b6c7bf;border-radius:12px;background:white;margin:3px;color:inherit}button{cursor:pointer}#mic,form button{background:#144d3e;color:white}form{display:flex}input{min-width:0;flex:1}small{color:#4d655c}#reply{font-size:19px;min-height:64px}#status{font-weight:bold}.atlas{padding:14px}.atlas header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.atlas select{padding:5px}.atlas details{padding:9px 0}.atlas summary{cursor:pointer}#atlasMap{height:clamp(260px,44vh,470px);border-radius:12px;background:#dce5e0}#flowKey{width:150px}</style><main><small>���� �� ���� ����</small><h1>���� �濡</h1><section class="atlas"><header><b>���� ��������</b> <label>���� ��Ÿ�� <select id="theme"><option value="ROADMAP">�Ϲ�</option><option value="HYBRID">��ī�̺�</option></select></label></header><figure id="backupMap" style="margin:0"><svg viewBox="0 -90 600 525" role="img" aria-label="���� 5�� �� �������� ��, �泲�� ��ġ" style="width:100%;height:280px;background:#eff4ef;border-radius:12px"><path fill="#c0d9cd" stroke="#81998f" d="M419,36L377,84L369,120L388,153L319,180L319,180L306,170L306,170L296,133L296,133L317,119L327,62L291,21L306,-2L306,-2L350,-3L372,7L406,-5L436,9L419,36Z"><title>�����</title></path><path fill="#d1e2ce" stroke="#81998f" d="M306,-2L291,21L327,62L317,119L296,133L296,133L277,133L237,170L222,199L225,227L182,296L162,309L162,309L107,278L120,257L120,207L120,207L144,171L150,65L150,65L165,53L208,53L242,11L249,-49L278,-73L297,-60L297,-60L308,-46L306,-2Z"><title>������</title></path><path fill="#e2dfc5" stroke="#81998f" d="M296,133L306,170L306,170L285,218L267,296L267,296L254,301L257,380L214,438L214,438L193,378L163,365L144,341L144,341L162,309L162,309L182,296L225,227L222,199L237,170L277,133L296,133Z"><title>����</title></path><path fill="#c7dedc" stroke="#81998f" d="M306,170L319,180L319,180L375,250L343,267L353,302L342,320L358,350L332,399L332,399L314,392L285,330L289,308L267,296L267,296L285,218L306,170Z"><title>�߱�</title></path><path fill="#d6dbc9" stroke="#81998f" d="M453,53L488,55L503,97L503,97L465,110L468,138L434,197L429,272L415,317L423,351L423,351L391,375L392,389L359,423L332,399L332,399L358,350L342,320L353,302L343,267L375,250L319,180L319,180L388,153L369,120L377,84L419,36L419,36L436,76L453,53Z"><title>����</title></path><circle cx="227" cy="144" r="7" fill="#124534"/><text x="217" y="149" text-anchor="end" font-size="20" font-weight="bold">�泲��</text><circle cx="379" cy="199" r="7" fill="#124534"/><text x="389" y="204" text-anchor="start" font-size="20" font-weight="bold">��</text></svg><figcaption><small>���� ��ġ�� �� ���û 2013 �ñ��� ��� �� <a href="https://github.com/southkorea/southkorea-maps">���ڷ�</a> �� <span id="via">����</span></small></figcaption></figure><a href="https://map.kakao.com/link/map/�泲��,36.363,127.344" target="_blank" rel="noopener">īī���ʿ��� ���� ��</a> <button id="roadRoute">���� ���� ��� ��ȸ</button><p id="roadResult" aria-live="polite"></p><div id="atlasMap" style="height:0"></div><small id="tileState">���� ��ġ�� �� �� �������� ���� �ߡ�</small><label><input id="flow" type="checkbox" disabled> �����Ȳ</label><details open><summary>īī�� ���� ����</summary><label>JavaScript Ű <input id="mapKey" autocomplete="off"></label><button id="connectMap">���� ����</button></details></section><section><b>���� ��� �� �� �� �泲��</b><p id="routes"></p><strong id="status"></strong></section><section><small>���� �ȳ�</small><p id="reply" aria-live="polite">���泲�� ���ڡ���� ���� �ּ���.</p><button id="mic">���� ����</button><span id="feedback"></span><form><input aria-label="��û" placeholder="�ű� �����? �Ʊ� ����� �� �� �� ����?"><button>������</button></form><div id="examples"></div></section><button id="traffic">���� ��ü ��ȯ</button><button id="pass">��õ ���� ���Է� ���</button><p><small>�ð��������Ρ����䡤���ݡ����� ������ ����� �����Դϴ�.</small></p></main><script>
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>가는 길에 · 경로 안내 데모</title><style>*{box-sizing:border-box}body{margin:0;background:#eff2ec;color:#142d26;font:16px/1.65 system-ui,sans-serif}main{max-width:720px;margin:auto;padding:28px 18px}h1{font-size:36px;margin:0}section{background:white;border-radius:18px;padding:20px;margin:14px 0}button,input{font:inherit;padding:9px 13px;border:1px solid #b6c7bf;border-radius:12px;background:white;margin:3px;color:inherit}button{cursor:pointer}#mic,form button{background:#144d3e;color:white}form{display:flex}input{min-width:0;flex:1}small{color:#4d655c}#reply{font-size:19px;min-height:64px}#status{font-weight:bold}.atlas{padding:14px}.atlas header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.atlas select{padding:5px}.atlas details{padding:9px 0}.atlas summary{cursor:pointer}#atlasMap{height:clamp(260px,44vh,470px);border-radius:12px;background:#dce5e0}#flowKey{width:150px}</style><main><small>대전 · 모의 주행</small><h1>가는 길에</h1><section class="atlas"><header><b>대전 도로지도</b> <label>지도 스타일 <select id="theme"><option value="ROADMAP">일반</option><option value="HYBRID">스카이뷰</option></select></label></header><figure id="backupMap" style="margin:0"><svg viewBox="0 -90 600 525" role="img" aria-label="대전 5개 구 행정경계와 용운동, 충남대 위치" style="width:100%;height:280px;background:#eff4ef;border-radius:12px"><path fill="#c0d9cd" stroke="#81998f" d="M419,36L377,84L369,120L388,153L319,180L319,180L306,170L306,170L296,133L296,133L317,119L327,62L291,21L306,-2L306,-2L350,-3L372,7L406,-5L436,9L419,36Z"><title>대덕구</title></path><path fill="#d1e2ce" stroke="#81998f" d="M306,-2L291,21L327,62L317,119L296,133L296,133L277,133L237,170L222,199L225,227L182,296L162,309L162,309L107,278L120,257L120,207L120,207L144,171L150,65L150,65L165,53L208,53L242,11L249,-49L278,-73L297,-60L297,-60L308,-46L306,-2Z"><title>유성구</title></path><path fill="#e2dfc5" stroke="#81998f" d="M296,133L306,170L306,170L285,218L267,296L267,296L254,301L257,380L214,438L214,438L193,378L163,365L144,341L144,341L162,309L162,309L182,296L225,227L222,199L237,170L277,133L296,133Z"><title>서구</title></path><path fill="#c7dedc" stroke="#81998f" d="M306,170L319,180L319,180L375,250L343,267L353,302L342,320L358,350L332,399L332,399L314,392L285,330L289,308L267,296L267,296L285,218L306,170Z"><title>중구</title></path><path fill="#d6dbc9" stroke="#81998f" d="M453,53L488,55L503,97L503,97L465,110L468,138L434,197L429,272L415,317L423,351L423,351L391,375L392,389L359,423L332,399L332,399L358,350L342,320L353,302L343,267L375,250L319,180L319,180L388,153L369,120L377,84L419,36L419,36L436,76L453,53Z"><title>동구</title></path><circle cx="227" cy="144" r="7" fill="#124534"/><text x="217" y="149" text-anchor="end" font-size="20" font-weight="bold">충남대</text><circle cx="379" cy="199" r="7" fill="#124534"/><text x="389" y="204" text-anchor="start" font-size="20" font-weight="bold">용운동</text></svg><figcaption><small>대전 위치도 · 통계청 2013 시군구 경계 · <a href="https://github.com/southkorea/southkorea-maps">원자료</a> · <span id="via">직행</span></small></figcaption></figure><a href="https://map.kakao.com/link/map/충남대,36.363,127.344" target="_blank" rel="noopener">카카오맵에서 열기 ↗</a> <button id="roadRoute">실제 도로 경로 조회</button><p id="roadResult" aria-live="polite"></p><div id="atlasMap" style="height:0"></div><small id="tileState">내장 위치도 · 상세 도로지도 연결 중…</small><label><input id="flow" type="checkbox" disabled> 교통상황</label><details open><summary>카카오 지도 연결</summary><label>JavaScript 키 <input id="mapKey" autocomplete="off"></label><button id="connectMap">지도 연결</button></details></section><section><b>모의 경로 · 용운동 → 충남대</b><p id="routes"></p><strong id="status"></strong></section><section><small>음성 안내</small><p id="reply" aria-live="polite">“충남대 가자”라고 말해 주세요.</p><button id="mic">음성 시작</button><span id="feedback"></span><form><input aria-label="요청" placeholder="거기 리뷰는? 아까 얘기한 곳 중 싼 곳은?"><button>보내기</button></form><div id="examples"></div></section><button id="traffic">모의 정체 전환</button><button id="pass">추천 매장 진입로 통과</button><p><small>시간·교차로·리뷰·가격·주차 정보는 데모용 예시입니다.</small></p></main><script>
 const el=id=>document.getElementById(id);
-const shops={�Ƶ�����:[8,'������ �ʿ��ϰ� ����̺꽺�簡 �־��.','���ݰ� ����� ��Ȯ���̿���.'],������A:[3,'���������� �����ϰ� �������� �־��.','��Ʈ 8õ ����, �湮�� ���� 320��, ���� 4.3��(5�� ����)�̿���.'],������:[2,'���� �������� �����ϰ� �������� �־��.','5õ �� �̳� �Ļ� ������ �־��. ����� ��Ȯ���̿���.']};
+const shops={맥도날드:[8,'유턴이 필요하고 드라이브스루가 있어요.','가격과 리뷰는 미확인이에요.'],버거집A:[3,'오른쪽으로 진입하고 주차장이 있어요.','세트 8천 원대, 방문자 리뷰 320개, 별점 4.3점(5점 만점)이에요.'],편의점:[2,'같은 방향으로 복귀하고 주차장이 있어요.','5천 원 이내 식사 조합이 있어요. 리뷰는 미확인이에요.']};
 const discussed=new Set(); let focus='',food='';
-const details={�Ƶ�����:{price:9000,review:'����Ƣ���� �����ϴٴ� ���� �־��. ��Ʈ�� 9õ ���̰� ����̺꽺�簡 �־��. ������ ũ��� ��Ȯ���̿���.'},������A:{price:8000,review:'�������� �а� ���� ��� ���ϴٴ� ���� ���ƿ�. ��Ʈ�� 8õ ��, �湮�� ���� 320���� ������ 4.3/5����.'},������:{price:4500,review:'������ �����ϴٴ� ���� �־��. �ָԹ䡤���� ������ 4,500���̰� �������� ���� ���̿���.'}};
+const details={맥도날드:{price:9000,review:'감자튀김이 따뜻하다는 평이 있어요. 세트는 9천 원이고 드라이브스루가 있어요. 주차장 크기는 미확인이에요.'},버거집A:{price:8000,review:'주차장이 넓고 차를 대기 편하다는 평이 많아요. 세트는 8천 원, 방문자 리뷰 320개에 별점은 4.3/5예요.'},편의점:{price:4500,review:'가격이 저렴하다는 평이 있어요. 주먹밥·음료 조합은 4,500원이고 주차장은 좁은 편이에요.'}};
 let route='',pending='',stop='',proposal='',jam=false,passed=new Set(),voice=false;
-function fastest(){return jam?'ū��':'���ɱ�'}
-function render(){el('via').textContent=stop||route||'����';el('routes').textContent='���ɱ� '+(jam?33:24)+'�� �� ��ȣ ������ 12����/��ū�� 26�� �� 5��';el('status').textContent=route?route+' �ȳ� ��'+(stop?' �� '+stop+' ����':' �� ����'):'��� ���� ��'}
+function fastest(){return jam?'큰길':'도심길'}
+function render(){el('via').textContent=stop||route||'직행';el('routes').textContent='도심길 '+(jam?33:24)+'분 · 신호 교차로 12곳　/　큰길 26분 · 5곳';el('status').textContent=route?route+' 안내 중'+(stop?' · '+stop+' 경유':' · 직행'):'경로 선택 전'}
 function say(s){el('reply').textContent=s;if(voice&&window.speechSynthesis){speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(s);u.lang='ko-KR';speechSynthesis.speak(u)}render()}
-const branches=['�Ƶ����� A��','�Ƶ����� B��'];
-shops[branches[0]]=[4,'���� ���⿡�� �����ؿ�.',''];shops[branches[1]]=shops.�Ƶ�����;
-for(const b of branches)details[b]={...details.�Ƶ�����,review:b===branches[0]?'��Ʈ�� 9õ ���̰� ���� ���⿡�� �����ؿ�. ������ ũ��� ����� ��Ȯ���̿���.':details.�Ƶ�����.review};
-delete details.�Ƶ�����;
+const branches=['맥도날드 A점','맥도날드 B점'];
+shops[branches[0]]=[4,'진행 방향에서 진입해요.',''];shops[branches[1]]=shops.맥도날드;
+for(const b of branches)details[b]={...details.맥도날드,review:b===branches[0]?'세트는 9천 원이고 진행 방향에서 진입해요. 주차장 크기와 리뷰는 미확인이에요.':details.맥도날드.review};
+delete details.맥도날드;
 function handle(q){q=q.trim();if(!q)return;
-if(/���|�׳� �б�|����/.test(q)){pending=stop=proposal='';return say('���� ��û�� ����߾��.')}
-if(/^(��|�׷�|����|�ű��|Ȯ��)/.test(q)){if(pending){stop=pending;focus=stop;pending='';return say(stop+' ������ �����߾��.')}if(proposal){route=proposal;proposal='';return say(route+'�� �ȳ��ҰԿ�.')}return say('���� Ȯ���� ������ �����.')}
-const other=/�ٸ�\s*(��|��|����)/.test(q);
-const openBrand=/����|�ָ�|����|�ٸ�\s*(����|�ܹ���|�귣��|����)|���Ÿ�/.test(q);
-const mc=/�Ƴ�|�Ƶ�����|��Ƣ/.test(q);
-if((mc||branches.includes(focus)&&(other||openBrand))&&!/����|����|�ı�|����|��|����/.test(q)){
- if(!route)return say('���� �泲����� �� ��θ� ���� �ּ���.');
+if(/취소|그냥 학교|직행/.test(q)){pending=stop=proposal='';return say('경유 요청을 취소했어요.')}
+if(/^(응|그래|좋아|거기로|확정)/.test(q)){if(pending){stop=pending;focus=stop;pending='';return say(stop+' 경유를 적용했어요.')}if(proposal){route=proposal;proposal='';return say(route+'로 안내할게요.')}return say('현재 확인할 제안이 없어요.')}
+const other=/다른\s*(데|곳|지점)/.test(q);
+const openBrand=/고민|애매|망설|다른\s*(버거|햄버거|브랜드|가게)|버거면/.test(q);
+const mc=/맥날|맥도날드|감튀/.test(q);
+if((mc||branches.includes(focus)&&(other||openBrand))&&!/리뷰|가격|후기|주차|싼|저렴/.test(q)){
+ if(!route)return say('먼저 충남대까지 갈 경로를 정해 주세요.');
  let available=branches.filter(b=>!passed.has(b));
- let choice=openBrand?'������A':other?available.find(b=>b!==focus):available[0];
- if(!choice||passed.has(choice)){pending='';return say('���� ��ο��� �ٸ� �ĺ��� ã�� ���߾��.')}
- pending=focus=choice;proposal='';food='����';discussed.add(choice);
- if(openBrand)return say('������ A�� �־��. 3�� �߰��̰� ���������� �� �� �־��. ���⿡ �鸦���?');
- const base=route==='ū��'?26:jam?33:24;
+ let choice=openBrand?'버거집A':other?available.find(b=>b!==focus):available[0];
+ if(!choice||passed.has(choice)){pending='';return say('현재 경로에서 다른 후보를 찾지 못했어요.')}
+ pending=focus=choice;proposal='';food='버거';discussed.add(choice);
+ if(openBrand)return say('버거집 A도 있어요. 3분 추가이고 오른쪽으로 들어갈 수 있어요. 여기에 들를까요?');
+ const base=route==='큰길'?26:jam?33:24;
  for(const b of available)discussed.add(b);
- return say(available.map(b=>b+'�� ��ġ�� �泲����� '+(base+shops[b][0])+'��').join(', ')+'. '+choice+'���� �����?');
+ return say(available.map(b=>b+'을 거치면 충남대까지 '+(base+shops[b][0])+'분').join(', ')+'. '+choice+'으로 갈까요?');
 }
-const named=/������/.test(q)?'������':/������\s*A/i.test(q)?'������A':/�Ƴ�|�Ƶ�����/.test(q)?(branches.includes(focus)?focus:branches[0]):'';
-const cheap=/��|�ΰ�|����|������|�ѵ�/.test(q);
-if(!cheap&&/����|�ı�|����|����|��|����|����/.test(q)){
+const named=/편의점/.test(q)?'편의점':/버거집\s*A/i.test(q)?'버거집A':/맥날|맥도날드/.test(q)?(branches.includes(focus)?focus:branches[0]):'';
+const cheap=/싼|싸게|저렴|가성비|싼데/.test(q);
+if(!cheap&&/리뷰|후기|별점|가격|얼마|주차|평이/.test(q)){
  const target=named||focus||pending||stop;
- if(!target)return say('��� ���� ���䰡 �ñ��ؿ�?');
+ if(!target)return say('어느 곳의 리뷰가 궁금해요?');
  focus=target;discussed.add(target);
- return say(target+'����. '+details[target].review);
+ return say(target+'은요. '+details[target].review);
 }
-if(cheap||named||/����|�װ� ���|��Ƣ/.test(q)){
- if(!route)return say('���� �泲����� �� ��θ� ���� �ּ���.');
+if(cheap||named||/버거|네가 골라|감튀/.test(q)){
+ if(!route)return say('먼저 충남대까지 갈 경로를 정해 주세요.');
  let name,reason='';
  if(cheap){
- const broad=/�ƹ��ų�|���� �����|��������|�ٸ� ����/.test(q);
- const prior=/���ݱ���|���� ����|�����|����|�߿���/.test(q);
+ const broad=/아무거나|음식 상관없|편의점도|다른 음식/.test(q);
+ const prior=/지금까지|지금 나온|얘기한|그중|중에서/.test(q);
  let pool=broad?Object.keys(details):Array.from(discussed);
  if(named&&!broad&&!prior)pool=[named];
- if(!prior&&!broad&&food==='����'&&!named)pool=pool.filter(n=>n!=='������');
+ if(!prior&&!broad&&food==='버거'&&!named)pool=pool.filter(n=>n!=='편의점');
  pool=pool.filter(n=>!passed.has(n)).sort((x,y)=>details[x].price-details[y].price);
- if(!pool.length)return say('���� �߿��� ã�����, ���������� �����?');
- name=pool[0];reason=(pool.length>1?pool.join('��')+' �߿����� ':'���� �� ���������� ')+name+'�� '+details[name].price.toLocaleString('ko-KR')+'���̿���. ';
- }else if(named==='������'){food='������';name=named}
- else{food='����';name=/��Ƣ|�Ƴ� ��/.test(q)?'�Ƶ�����':'������A';if(named==='�Ƶ�����'&&name!==named){discussed.add(named);reason='�Ƴ��� �����ؾ� �ϰ� 8�� �� �ɷ���. '}}
- pending=proposal='';if(passed.has(name))return say('�� ���� ���Էδ� �������.');
+ if(!pool.length)return say('버거 중에서 찾을까요, 편의점까지 볼까요?');
+ name=pool[0];reason=(pool.length>1?pool.join('·')+' 중에서는 ':'지금 비교 범위에서는 ')+name+'이 '+details[name].price.toLocaleString('ko-KR')+'원이에요. ';
+ }else if(named==='편의점'){food='편의점';name=named}
+ else{food='버거';name=/감튀|맥날 꼭/.test(q)?'맥도날드':'버거집A';if(named==='맥도날드'&&name!==named){discussed.add(named);reason='맥날은 유턴해야 하고 8분 더 걸려요. '}}
+ pending=proposal='';if(passed.has(name))return say('그 매장 진입로는 지났어요.');
  discussed.add(name);focus=pending=name;
- return say(reason+name+'�� '+shops[name][0]+'�� �߰�����. '+shops[name][1]+' �鸦���?');
+ return say(reason+name+'은 '+shops[name][0]+'분 추가예요. '+shops[name][1]+' 들를까요?');
 }
-if(/�泲��|��ȣ|����|����|ū��/.test(q)){pending='';proposal=/��ȣ|ū��/.test(q)?'ū��':fastest();return say(proposal+'�� ��õ�ؿ�. '+el('routes').textContent+'����. �� ��� �����?')}
-say('���� ��, ��ȣ ���� ��, �Ǵ� �鸣�� ���� ���� ���� �ּ���.')}
+if(/충남대|신호|빨리|빠른|큰길/.test(q)){pending='';proposal=/신호|큰길/.test(q)?'큰길':fastest();return say(proposal+'을 추천해요. '+el('routes').textContent+'예요. 이 길로 갈까요?')}
+say('빠른 길, 신호 적은 길, 또는 들르고 싶은 곳을 말해 주세요.')}
 document.querySelector('form').onsubmit=e=>{e.preventDefault();let i=document.querySelector('form input');handle(i.value);i.value=''};
-for(const s of ['�泲�� ����','��ȣ ���� ��','��','�Ƴ� ����','�ٸ� ����?','���εǳ�','�ű� �����?','�� ������','�׳� �б� ����']){let b=document.createElement('button');b.textContent=s;b.onclick=()=>handle(s);el('examples').append(b)}
-el('traffic').onclick=()=>{jam=!jam;pending=proposal='';render();say('������ �ٲ�����. ���� ���� ���� ���� '+fastest()+'�̿���. ���� ��� �ٲܱ��?');proposal=fastest()};
-el('pass').onclick=()=>{if(pending){passed.add(pending);pending='';say('���Էθ� ���� ���� ��õ�� ����߾��.')}else say('���� ��õ ���� ������ �����.')};
+for(const s of ['충남대 가자','신호 적은 길','응','맥날 가자','다른 데는?','고민되네','거기 리뷰는?','싼 곳으로','그냥 학교 가자']){let b=document.createElement('button');b.textContent=s;b.onclick=()=>handle(s);el('examples').append(b)}
+el('traffic').onclick=()=>{jam=!jam;pending=proposal='';render();say('교통이 바뀌었어요. 지금 가장 빠른 길은 '+fastest()+'이에요. 빠른 길로 바꿀까요?');proposal=fastest()};
+el('pass').onclick=()=>{if(pending){passed.add(pending);pending='';say('진입로를 지나 이전 추천을 취소했어요.')}else say('현재 추천 중인 매장이 없어요.')};
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-el('mic').onclick=()=>{if(!SR)return say('�� ������������ ��ư�̳� �Է�â���� ������ �ּ���.');if(voice){voice=false;window.rec.stop();window.speechSynthesis?.cancel();el('mic').textContent='���� ����';return}let rec=new SR();window.rec=rec;rec.lang='ko-KR';rec.continuous=true;rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal&&!window.speechSynthesis?.speaking)handle(e.results[i][0].transcript)};rec.onerror=e=>{voice=false;el('feedback').textContent='���� �ν� �ߴ� �� '+e.error};rec.onend=()=>{if(voice){try{rec.start();return}catch{voice=false}}el('mic').textContent='���� ����'};try{rec.start();voice=true;el('mic').textContent='���� ����'}catch{say('����ũ�� ������ �� �����.')}};render()
+el('mic').onclick=()=>{if(!SR)return say('이 브라우저에서는 버튼이나 입력창으로 시험해 주세요.');if(voice){voice=false;window.rec.stop();window.speechSynthesis?.cancel();el('mic').textContent='음성 시작';return}let rec=new SR();window.rec=rec;rec.lang='ko-KR';rec.continuous=true;rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal&&!window.speechSynthesis?.speaking)handle(e.results[i][0].transcript)};rec.onerror=e=>{voice=false;el('feedback').textContent='음성 인식 중단 · '+e.error};rec.onend=()=>{if(voice){try{rec.start();return}catch{voice=false}}el('mic').textContent='음성 시작'};try{rec.start();voice=true;el('mic').textContent='음성 종료'}catch{say('마이크를 시작할 수 없어요.')}};render()
 </script><script>
 const mapStatus=el('tileState'),connect=el('connectMap');
 el('roadRoute').disabled=true;
-mapStatus.textContent=location.protocol==='file:'?'����� �� �ּҿ��� ���� īī�� ������ ������ �� �־��.':'�� �ּҸ� JavaScript SDK �����ο� ����ϼ���. '+location.origin;
+mapStatus.textContent=location.protocol==='file:'?'등록한 웹 주소에서 열면 카카오 지도를 연결할 수 있어요.':'이 주소를 JavaScript SDK 도메인에 등록하세요. '+location.origin;
 connect.onclick=()=>{
- if(!/^https?:$/.test(location.protocol)){mapStatus.textContent='�� ������ ���� �ּ���. ��: http://localhost:8080/route-agent-demo.html';return}
- const key=el('mapKey').value.trim();if(!key){mapStatus.textContent='���� JavaScript Ű�� �Է��� �ּ���.';return}
- connect.disabled=true;mapStatus.textContent='īī�� ���� ���� �ߡ�';
+ if(!/^https?:$/.test(location.protocol)){mapStatus.textContent='웹 서버로 열어 주세요. 예: http://localhost:8080/route-agent-demo.html';return}
+ const key=el('mapKey').value.trim();if(!key){mapStatus.textContent='앱의 JavaScript 키를 입력해 주세요.';return}
+ connect.disabled=true;mapStatus.textContent='카카오 지도 연결 중…';
  const sdk=document.createElement('script');let active=true;
- function fail(){if(!active)return;active=false;clearTimeout(timeout);connect.disabled=false;sdk.remove();mapStatus.textContent='���� ���� �� JavaScript Ű, ��� ������, īī���� ��� ������ Ȯ���ϼ���.'}
+ function fail(){if(!active)return;active=false;clearTimeout(timeout);connect.disabled=false;sdk.remove();mapStatus.textContent='연결 실패 · JavaScript 키, 등록 도메인, 카카오맵 사용 설정을 확인하세요.'}
  const timeout=setTimeout(fail,15000);
  sdk.onerror=fail;sdk.onload=()=>{if(!window.kakao?.maps)return fail();kakao.maps.load(()=>{if(!active)return;try{
  const k=kakao.maps,canvas=el('atlasMap');canvas.style.height='350px';
  const map=new k.Map(canvas,{center:new k.LatLng(36.345,127.40),level:7});
- const bounds=new k.LatLngBounds();for(const [lat,lng,title] of [[36.329,127.461,'��'],[36.363,127.344,'�泲��']]){const p=new k.LatLng(lat,lng);bounds.extend(p);new k.Marker({map,position:p,title})}map.setBounds(bounds);
+ const bounds=new k.LatLngBounds();for(const [lat,lng,title] of [[36.329,127.461,'용운동'],[36.363,127.344,'충남대']]){const p=new k.LatLng(lat,lng);bounds.extend(p);new k.Marker({map,position:p,title})}map.setBounds(bounds);
  const theme=el('theme');theme.onchange=()=>map.setMapTypeId(k.MapTypeId[theme.value]);theme.onchange();
  const flow=el('flow');flow.disabled=false;flow.onchange=()=>flow.checked?map.addOverlayMapTypeId(k.MapTypeId.TRAFFIC):map.removeOverlayMapTypeId(k.MapTypeId.TRAFFIC);
  let road;el('roadRoute').disabled=false;
   document.getElementById('roadRoute').onclick=async function(){
- const report=document.getElementById('roadResult');this.disabled=true;report.textContent='���� ��� ��ȸ �ߡ�';
+ const report=document.getElementById('roadResult');this.disabled=true;report.textContent='도로 경로 조회 중…';
  try{
  const response=await fetch('https://router.project-osrm.org/route/v1/driving/127.461,36.329;127.344,36.363?overview=full&geometries=geojson',{signal:AbortSignal.timeout(12000)});
  if(!response.ok)throw Error();const data=await response.json();const path=data.routes?.[0];if(!path?.geometry)throw Error();
  const points=path.geometry.coordinates.map(([lng,lat])=>new k.LatLng(lat,lng));if(road)road.setMap(null);road=new k.Polyline({map,path:points,strokeWeight:5,strokeColor:'#285ddd'});const bounds=new k.LatLngBounds();points.forEach(p=>bounds.extend(p));map.setBounds(bounds);
- report.textContent='OSRM �ڵ��� ��� �� '+(path.distance/1000).toFixed(1)+'km �� �� '+Math.round(path.duration/60)+'�� (�ǽð� ���� �̹ݿ�)';
- }catch{report.textContent='��� ������ �������� ���߾��. ��� �� �ٽ� ��ȸ�� �ּ���.'}finally{this.disabled=false}
+ report.textContent='OSRM 자동차 경로 · '+(path.distance/1000).toFixed(1)+'km · 약 '+Math.round(path.duration/60)+'분 (실시간 교통 미반영)';
+ }catch{report.textContent='경로 서버에 연결하지 못했어요. 잠시 후 다시 조회해 주세요.'}finally{this.disabled=false}
  };
 
- clearTimeout(timeout);active=false;el('backupMap').hidden=true;mapStatus.textContent='īī�� ���� �� �� �� �泲��';el('mapKey').value='';connect.closest('details').open=false
+ clearTimeout(timeout);active=false;el('backupMap').hidden=true;mapStatus.textContent='카카오 지도 · 용운동 → 충남대';el('mapKey').value='';connect.closest('details').open=false
  }catch{fail()}})};
  sdk.src='https://dapi.kakao.com/v2/maps/sdk.js?autoload=false&appkey='+encodeURIComponent(key);document.head.append(sdk)
 };
