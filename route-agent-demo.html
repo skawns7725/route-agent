@@ -68,9 +68,20 @@ el('roadRoute').disabled=true;
 function loadMap(key){
  mapStatus.textContent='카카오 지도 연결 중…';
  const sdk=document.createElement('script');let active=true;
- function fail(){if(!active)return;active=false;clearTimeout(timeout);sdk.remove();mapStatus.textContent='카카오 지도를 불러오지 못했어요. SDK 키와 등록 도메인을 확인해 주세요.'}
- const timeout=setTimeout(fail,15000);
- sdk.onerror=fail;sdk.onload=()=>{if(!window.kakao?.maps)return fail();kakao.maps.load(()=>{if(!active)return;try{
+ let stage='SDK 다운로드';
+ function fail(reason){
+ if(!active)return;
+ active=false;clearTimeout(timeout);sdk.remove();
+ mapStatus.textContent='카카오 지도 연결 실패 ['+stage+'] · '+reason;
+ }
+ const timeout=setTimeout(()=>fail('응답 시간이 초과됐어요.'),15000);
+ sdk.onerror=()=>fail('카카오 SDK 요청이 실패했어요. 브라우저 네트워크 탭에서 응답 상태를 확인해 주세요.');
+ sdk.onload=()=>{
+ stage='SDK 초기화';
+ if(typeof window.kakao?.maps?.load!=='function')return fail('SDK가 초기화 함수를 제공하지 않았어요.');
+ try{kakao.maps.load(()=>{if(!active)return;
+ stage='지도 생성';
+ try{
  const k=kakao.maps,canvas=el('atlasMap');canvas.style.height='350px';
  const map=new k.Map(canvas,{center:new k.LatLng(36.4,127.8),level:13});
  map.addControl(new k.ZoomControl(),k.ControlPosition.RIGHT);
@@ -199,7 +210,10 @@ const fields=el('tripFields'), report=el('roadResult'), search=el('roadRoute'), 
  }catch(error){if(token===revision)report.textContent=error.message||'경로 조회에 실패했어요. 다시 시도해 주세요.'}finally{if(token===revision)search.disabled=false}
  };
   clearTimeout(timeout);active=false;el('backupMap').hidden=true;mapStatus.textContent='카카오 지도 · 국내 장소와 자동차 길찾기';
- }catch{fail()}})};
+ }catch(error){fail(error instanceof Error?error.name:'지도 초기화 오류')}
+ });
+ }catch(error){fail(error instanceof Error?error.name:'SDK 초기화 오류')}
+ };
  sdk.src='https://dapi.kakao.com/v2/maps/sdk.js?autoload=false&libraries=services&appkey='+encodeURIComponent(key);document.head.append(sdk)
 }
 async function initializeMap(){
