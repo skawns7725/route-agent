@@ -23,6 +23,8 @@
 
 ## Codespaces 지도 확인
 
+반복되는 404나 포트 문제는 [Codespaces 미리보기 복구](docs/CODESPACES_RECOVERY.md)를 참고한다.
+
 서버는 `node serve.cjs`로 실행하며 기본 포트는 8080이다. 앱은 `KAKAO_MAP_JAVASCRIPT_KEY`를 사용해 지도를 자동 로딩한다. 자동차 경로 조회에는 별도의 `KAKAO_MOBILITY_REST_KEY`가 필요하다.
 
 Codespaces 미리보기에서 지도가 뜨지 않으면 해당 Codespace의 터미널에서 실행 중인 서버 설정을 확인한다. 아래 명령은 키 값을 출력하지 않는다.
