@@ -65,7 +65,7 @@ el('mic').onclick=()=>{if(!SR)return say('이 브라우저에서는 버튼이나
 </script><script>
 const mapStatus=el('tileState'),connect=el('connectMap');
 el('roadRoute').disabled=true;
-mapStatus.textContent=location.protocol==='file:'?'등록한 웹 주소에서 열면 카카오 지도를 연결할 수 있어요.':'카카오 JavaScript 키를 입력한 뒤 지도 연결을 눌러 주세요.';
+mapStatus.textContent=location.protocol==='file:'?'등록한 웹 주소에서 열면 카카오 지도를 연결할 수 있어요.':'이 주소를 JavaScript SDK 도메인에 등록하세요. '+location.origin;
 connect.onclick=()=>{
  if(!/^https?:$/.test(location.protocol)){mapStatus.textContent='웹 서버로 열어 주세요. 예: http://localhost:8080/route-agent-demo.html';return}
  const key=el('mapKey').value.trim();if(!key){mapStatus.textContent='앱의 JavaScript 키를 입력해 주세요.';return}
@@ -75,22 +75,31 @@ connect.onclick=()=>{
  const timeout=setTimeout(fail,15000);
  sdk.onerror=fail;sdk.onload=()=>{if(!window.kakao?.maps)return fail();kakao.maps.load(()=>{if(!active)return;try{
  const k=kakao.maps,canvas=el('atlasMap');canvas.style.height='350px';
- const map=new k.Map(canvas,{center:new k.LatLng(36.345,127.40),level:7});
- const bounds=new k.LatLngBounds();for(const [lat,lng,title] of [[36.329,127.461,'용운동'],[36.363,127.344,'충남대']]){const p=new k.LatLng(lat,lng);bounds.extend(p);new k.Marker({map,position:p,title})}map.setBounds(bounds);
+ const map=new k.Map(canvas,{center:new k.LatLng(36.4,127.8),level:13});
+ map.addControl(new k.ZoomControl(),k.ControlPosition.RIGHT);
  const theme=el('theme');theme.onchange=()=>map.setMapTypeId(k.MapTypeId[theme.value]);theme.onchange();
  const flow=el('flow');flow.disabled=false;flow.onchange=()=>flow.checked?map.addOverlayMapTypeId(k.MapTypeId.TRAFFIC):map.removeOverlayMapTypeId(k.MapTypeId.TRAFFIC);
 const fields=el('tripFields'), report=el('roadResult'), search=el('roadRoute'), list=el('tripResults');
- const places=new k.services.Places(), slots={};let revision=0,lines=[],markers=[];const details=el('tripDetails'),steps=el('tripSteps');
+ const places=new k.services.Places(), geocoder=new k.services.Geocoder(), slots={};let revision=0,lines=[],markers=[];const details=el('tripDetails'),steps=el('tripSteps');
+ function lookup(query,callback){
+ places.keywordSearch(query,(data,status)=>{
+ if(status!==k.services.Status.ZERO_RESULT){callback(data||[],status);return}
+ geocoder.addressSearch(query,(addresses,addressStatus)=>callback((addresses||[]).map(place=>({...place,place_name:place.address_name})),addressStatus));
+ });
+ }
+ function setPlace(slot,place){
+ slot.query++;clearTimeout(slot.timer);slot.value=place;slot.input.value=place.place_name;slot.results.replaceChildren();invalidate();
+ }
  function invalidate(){revision++;search.disabled=false;list.replaceChildren();details.hidden=true;details.open=false;steps.replaceChildren();for(const marker of markers)marker.setMap(null);markers=[];for(const line of lines)line.setMap(null);lines=[];report.textContent='장소를 확정한 뒤 경로를 조회하세요.'}
  for(const [id,label] of [['start','출발지'],['via','경유지 (선택)'],['end','도착지']]){
  const row=document.createElement('div'), title=document.createElement('label'), input=document.createElement('input'), results=document.createElement('div');
  title.textContent=label;title.append(input);row.append(title,results);el('tripPlaces').append(row);
  const slot=slots[id]={row,input,results,value:null,query:0,timer:null};
  input.oninput=()=>{slot.value=null;invalidate();clearTimeout(slot.timer);const token=++slot.query, q=input.value.trim();results.replaceChildren();if(q.length<2)return;
- slot.timer=setTimeout(()=>places.keywordSearch(q,(data,status)=>{if(token!==slot.query)return;
+ slot.timer=setTimeout(()=>lookup(q,(data,status)=>{if(token!==slot.query)return;
  results.replaceChildren();if(status!==k.services.Status.OK){results.textContent=status===k.services.Status.ZERO_RESULT?'검색 결과가 없어요.':'장소 검색에 실패했어요.';return}
- for(const place of data.slice(0,5)){const b=document.createElement('button');b.type='button';b.textContent=place.place_name+' · '+(place.road_address_name||place.address_name);b.onclick=()=>{slot.value=place;input.value=place.place_name;results.replaceChildren();invalidate()};results.append(b)}
- },{location:map.getCenter()}),300)};
+ for(const place of data.slice(0,5)){const b=document.createElement('button');b.type='button';b.textContent=place.place_name+' · '+(place.road_address_name||place.address_name);b.onclick=()=>setPlace(slot,place);results.append(b)}
+ }),300)};
  }
  slots.via.row.hidden=true;
  const viaToggle=el('tripVia');
@@ -101,6 +110,63 @@ const fields=el('tripFields'), report=el('roadResult'), search=el('roadRoute'), 
  slot.query++;clearTimeout(slot.timer);slot.value=null;slot.input.value='';slot.results.replaceChildren();invalidate();
  };
  el('tripSwap').onclick=()=>{const a=slots.start,b=slots.end;[a.value,b.value]=[b.value,a.value];[a.input.value,b.input.value]=[b.input.value,a.input.value];for(const slot of [a,b]){slot.query++;clearTimeout(slot.timer);slot.results.replaceChildren()}invalidate()};
+ const tools=document.createElement('section');
+ tools.innerHTML='<form><input aria-label="장소 이름 또는 주소" placeholder="장소 이름 또는 주소"><button>검색</button></form><button type="button" data-locate>현재 위치</button><p role="status"></p><div data-results></div><div data-place hidden><strong></strong> <a target="_blank" rel="noopener noreferrer">장소 상세</a><div><button data-slot="start">출발지로</button><button data-slot="via">경유지로</button><button data-slot="end">도착지로</button></div></div>';
+ canvas.before(tools);
+ const form=tools.querySelector('form'), query=form.querySelector('input'), message=tools.querySelector('p');
+ const results=tools.querySelector('[data-results]'), card=tools.querySelector('[data-place]'), pin=new k.Marker();
+ let selected=null,queryVersion=0;
+ function showPlace(place,zoom){
+ selected=place;
+ const position=new k.LatLng(Number(place.y),Number(place.x));
+ pin.setPosition(position);pin.setMap(map);
+ if(zoom){map.setLevel(4);map.panTo(position)}
+ const address=place.road_address_name||place.address_name;
+ card.querySelector('strong').textContent=address&&address!==place.place_name?place.place_name+' · '+address:place.place_name;
+ const link=card.querySelector('a');
+ link.hidden=!/^https?:\/\/place\.map\.kakao\.com\/\d+/.test(place.place_url||'');
+ if(!link.hidden)link.href=place.place_url;
+ card.hidden=false;
+ }
+ for(const button of card.querySelectorAll('[data-slot]'))button.onclick=()=>{
+ const id=button.dataset.slot;
+ if(id==='via'&&slots.via.row.hidden)viaToggle.click();
+ setPlace(slots[id],selected);
+ };
+ query.oninput=()=>{queryVersion++;results.replaceChildren();message.textContent=''};
+ form.onsubmit=event=>{
+ event.preventDefault();
+ const keyword=query.value.trim(),token=++queryVersion;
+ results.replaceChildren();
+ if(!keyword){message.textContent='장소 이름이나 주소를 입력하세요.';return}
+ message.textContent='장소 검색 중…';
+ lookup(keyword,(data,status)=>{
+ if(token!==queryVersion)return;
+ message.textContent=status===k.services.Status.OK?'':status===k.services.Status.ZERO_RESULT?'검색 결과가 없어요.':'장소 검색에 실패했어요.';
+ for(const place of data){
+ const button=document.createElement('button');button.type='button';
+ button.textContent=place.place_name+(place.address_name&&place.address_name!==place.place_name?' · '+place.address_name:'');
+ button.onclick=()=>showPlace(place,true);results.append(button);
+ }
+ });
+ };
+ k.event.addListener(map,'click',event=>{
+ const x=event.latLng.getLng(),y=event.latLng.getLat();
+ const point={x,y,place_name:y.toFixed(5)+', '+x.toFixed(5)};
+ showPlace(point,false);
+ geocoder.coord2Address(x,y,(data,status)=>{
+ if(selected!==point||status!==k.services.Status.OK)return;
+ const address=data[0]?.road_address?.address_name||data[0]?.address?.address_name;
+ if(address)showPlace({...point,place_name:address},false);
+ });
+ });
+ tools.querySelector('[data-locate]').onclick=()=>{
+ if(!navigator.geolocation){message.textContent='현재 위치를 지원하지 않는 환경이에요.';return}
+ message.textContent='현재 위치 확인 중…';
+ navigator.geolocation.getCurrentPosition(({coords})=>{
+ message.textContent='';showPlace({x:coords.longitude,y:coords.latitude,place_name:'현재 위치'},true);
+ },()=>{message.textContent='현재 위치를 확인하지 못했어요. 위치 권한을 확인해 주세요.'},{timeout:10000});
+ };
  el('avoidTolls').onchange=invalidate; fields.disabled=false;search.disabled=false;
  search.onclick=async()=>{
  if(!slots.start.value||!slots.end.value||slots.via.input.value.trim()&&!slots.via.value){report.textContent='검색 결과에서 출발지·도착지와 입력한 경유지를 선택하세요.';return}
@@ -135,8 +201,18 @@ const fields=el('tripFields'), report=el('roadResult'), search=el('roadRoute'), 
  select(0);report.textContent='카카오모빌리티 · 교통 반영 조회 '+new Date(data.fetchedAt).toLocaleTimeString('ko-KR');
  }catch(error){if(token===revision)report.textContent=error.message||'경로 조회에 실패했어요. 다시 시도해 주세요.'}finally{if(token===revision)search.disabled=false}
  };
-  clearTimeout(timeout);active=false;el('backupMap').hidden=true;mapStatus.textContent='카카오 지도 · 용운동 → 충남대';el('mapKey').value='';connect.closest('details').open=false
+  clearTimeout(timeout);active=false;el('backupMap').hidden=true;mapStatus.textContent='카카오 지도 · 국내 장소와 자동차 길찾기';el('mapKey').value='';connect.closest('details').open=false
  }catch{fail()}})};
  sdk.src='https://dapi.kakao.com/v2/maps/sdk.js?autoload=false&libraries=services&appkey='+encodeURIComponent(key);document.head.append(sdk)
 };
+if(/^https?:$/.test(location.protocol)){
+ fetch('/api/map-config',{signal:AbortSignal.timeout(5000)})
+ .then(response=>response.ok?response.json():null)
+ .then(config=>{
+ if(!config?.javascriptKey||connect.disabled||el('mapKey').value.trim())return;
+ el('mapKey').value=config.javascriptKey;
+ connect.click();
+ })
+ .catch(()=>{});
+}
 </script></html>

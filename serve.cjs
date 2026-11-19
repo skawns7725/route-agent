@@ -15,6 +15,9 @@ function json(res, status, payload) {
 async function handler(req, res) {
   const url = new URL(req.url, 'http://localhost');
   if (req.method !== 'GET') return json(res, 405, {error:'지원하지 않는 요청입니다.'});
+  if (url.pathname === '/api/map-config') {
+    return json(res, 200, {javascriptKey:process.env.KAKAO_MAP_JAVASCRIPT_KEY?.trim() || ''});
+  }
   if (url.pathname === '/api/routes') {
     if (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin') {
       return json(res, 403, {error:'앱 화면에서 다시 조회해 주세요.'});
