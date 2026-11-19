@@ -34,6 +34,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   root.innerHTML = `
     <div class="route-toolbar inline-actions">
       <button class="secondary" id="routeSeoul" type="button" disabled>서울시청 → 서울역 검색</button>
+      <button class="secondary" id="routeUlsan" type="button" disabled>태화로터리 → 울산시청 검색</button>
       <button class="secondary" id="routeGps" type="button">현 위치에서 출발</button>
       <button class="secondary" id="routeSwap" type="button">출발·도착 바꾸기</button>
     </div>
@@ -363,8 +364,9 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   drive.addEventListener('click',startDrive);
   simulate.addEventListener('click',startSimulation);
   const seoul = find('routeSeoul');
-  seoul.addEventListener('click',()=>{
-    for (const [id,query] of [['start','서울시청'],['via',''],['end','서울역']]) {
+  const ulsan = find('routeUlsan');
+  function searchTrip(origin,destination) {
+    for (const [id,query] of [['start',origin],['via',''],['end',destination]]) {
       const slot = slots[id];
       cancelLookup(slot);
       slot.place = null;
@@ -374,16 +376,19 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     viaButton.setAttribute('aria-expanded','false');
     viaButton.textContent = '경유지 추가';
     clearResults();
-    status.textContent = '서울 출발지와 도착지의 검색 결과를 선택해 주세요.';
+    status.textContent = '출발지와 도착지의 검색 결과를 선택해 주세요.';
     searchPlace(slots.start);
     searchPlace(slots.end);
-  });
+  }
+  seoul.onclick = ()=>searchTrip('서울시청','서울역');
+  ulsan.onclick = ()=>searchTrip('태화로터리','울산시청');
   map.onReady(({sdk:maps}) => {
     sdk = maps;
     places = new sdk.services.Places();
     geocoder = new sdk.services.Geocoder();
     compare.disabled = false;
     seoul.disabled = false;
+    ulsan.disabled = false;
     if (!gpsPending) status.textContent = '장소를 검색하거나 현재 위치를 출발지로 지정해 주세요.';
     for (const slot of Object.values(slots)) if (slot.input.value && !slot.place) searchPlace(slot);
   });

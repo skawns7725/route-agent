@@ -1,6 +1,6 @@
 import {prepareRouteGeometry, projectOnSegment} from './driving.mjs';
 
-const seoul = '1100000000';
+const navigationRegions = ['1100000000','3100000000'];
 const directions = ['북쪽','북동쪽','동쪽','남동쪽','남쪽','남서쪽','서쪽','북서쪽'];
 const corridorMeters = 24;
 const liveRange = 350;
@@ -69,7 +69,7 @@ export function currentSignalRows(crossing, snapshot, now) {
 
 async function request(path, params, sessionSignal) {
   const signal = AbortSignal.any([sessionSignal,AbortSignal.timeout(12000)]);
-  const response = await fetch(path+'?'+new URLSearchParams({region:seoul,...params}),{signal});
+  const response = await fetch(path+'?'+new URLSearchParams(params),{signal});
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || '실시간 신호를 가져오지 못했어요.');
   return data;
@@ -82,7 +82,7 @@ export function initNextSignal({map, card}) {
   const status = card.querySelector('[role=status]');
   const rows = card.querySelector('ul');
   let active;
-  let catalog;
+  const catalogs = new Map();
 
   function setText(node,value) {
     if (node.textContent !== value) node.textContent = value;
@@ -102,7 +102,7 @@ export function initNextSignal({map, card}) {
     if (session.meters === null) message = '경로 위 현재 위치를 확인하고 있어요.';
     else if (session.error) message = session.error;
     else if (!session.crossings) message = '경로의 신호 교차로를 확인하고 있어요.';
-    else if (!crossing) message = '전방 경로에 서울 실시간 서비스의 교차로가 없어요.';
+    else if (!crossing) message = '전방 경로와 연결된 신호 교차로가 없어요.';
     else if (crossing.movement === '우회전') message = '공공데이터에서 우회전 전용 신호를 제공하지 않아요.';
     else if (!crossing.approach || !crossing.movement) message = '이 경로의 진입 방면 신호를 확인할 수 없어요.';
     else if (meters > liveRange) message = '교차로 350 m 이내에서 현재 신호를 조회해요.';
@@ -151,7 +151,7 @@ export function initNextSignal({map, card}) {
     session.pending = controller;
     render(session);
     try {
-      const snapshot = await request('/api/traffic-signals',{id:crossing.id},controller.signal);
+      const snapshot = await request('/api/traffic-signals',{region:crossing.region,id:crossing.id},controller.signal);
       if (session.pending === controller) session.snapshot = snapshot;
     } catch {
       if (session.pending === controller && !controller.signal.aborted) session.snapshot = null;
@@ -175,19 +175,23 @@ export function initNextSignal({map, card}) {
   }
 
   async function loadCatalog(session, geometry) {
-    try {
-      if (!catalog || Date.now() >= catalog.expires) {
-        const result = await request('/api/intersections',{},session.controller.signal);
-        if (active !== session) return;
-        catalog = {crossings:result.intersections,expires:Date.now()+30*60*1000};
-      }
-      session.crossings = matchCrossings(geometry,catalog.crossings);
-      updateCrossing(session);
-    } catch (error) {
-      if (active !== session) return;
-      session.error = error.message || '교차로를 불러오지 못했어요.';
+    const results = await Promise.allSettled(navigationRegions.map(async region=>{
+      const cached = catalogs.get(region);
+      if (cached && Date.now() < cached.expires) return cached.crossings;
+      const result = await request('/api/intersections',{region},session.controller.signal);
+      const crossings = result.intersections.map(crossing=>({...crossing,region}));
+      if (active === session) catalogs.set(region,{crossings,expires:Date.now()+30*60*1000});
+      return crossings;
+    }));
+    if (active !== session) return;
+    const loaded = results.filter(result=>result.status === 'fulfilled');
+    if (!loaded.length) {
+      session.error = results[0].reason.message || '교차로를 불러오지 못했어요.';
       render(session);
+      return;
     }
+    session.crossings = matchCrossings(geometry,loaded.flatMap(result=>result.value));
+    updateCrossing(session);
   }
 
   function start(owner, route, dock) {
