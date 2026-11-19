@@ -1,429 +1,82 @@
-<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>가는 길에 · 경로 안내 데모</title><style>*{box-sizing:border-box}body{margin:0;background:#eff2ec;color:#142d26;font:16px/1.65 system-ui,sans-serif}main{max-width:720px;margin:auto;padding:28px 18px}h1{font-size:36px;margin:0}section{background:white;border-radius:18px;padding:20px;margin:14px 0}button,input{font:inherit;padding:9px 13px;border:1px solid #b6c7bf;border-radius:12px;background:white;margin:3px;color:inherit}button{cursor:pointer}#mic,form button{background:#144d3e;color:white}form{display:flex}input{min-width:0;flex:1}small{color:#4d655c}#reply{font-size:19px;min-height:64px}#status{font-weight:bold}.atlas{padding:14px}.atlas header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.atlas select{padding:5px}.atlas details{padding:9px 0}.atlas summary{cursor:pointer}#atlasMap{height:clamp(260px,44vh,470px);border-radius:12px;background:#dce5e0}#flowKey{width:150px}#tripPlaces{display:grid;gap:.6rem}#tripPlaces label{display:grid;gap:.2rem}#tripPlaces input{width:100%;margin:0}#tripPlaces button{display:block;text-align:left;width:100%;margin:4px 0}#tripResults{display:flex;gap:6px;flex-wrap:wrap}#tripResults button[aria-pressed="true"]{border-color:#164ad2;background:#e9efff}#tripDetails{margin:.6rem 0}#tripDetails ol{max-height:230px;overflow:auto;padding-left:2rem}@media(min-width:840px){main{max-width:1100px}.atlas{display:grid;grid-template-columns:minmax(270px,1fr) minmax(350px,1.7fr);gap:8px 16px}.atlas header{grid-column:1/-1}#atlasMap,#backupMap{grid-column:2;grid-row:2/span 6;align-self:start}#tripFields,#tripResults,#tripDetails,#roadResult{grid-column:1}#roadRoute{justify-self:start}}@media(max-width:580px){#atlasMap{max-height:44vh}#tripResults button{flex:1 1 100%;text-align:left}}</style><main><small>대전 · 모의 주행</small><h1>가는 길에</h1><section class="atlas"><header><b>대전 도로지도</b> <label>지도 스타일 <select id="theme"><option value="ROADMAP">일반</option><option value="HYBRID">스카이뷰</option></select></label></header><figure id="backupMap" style="margin:0"><svg viewBox="0 -90 600 525" role="img" aria-label="대전 5개 구 행정경계와 용운동, 충남대 위치" style="width:100%;height:280px;background:#eff4ef;border-radius:12px"><path fill="#c0d9cd" stroke="#81998f" d="M419,36L377,84L369,120L388,153L319,180L319,180L306,170L306,170L296,133L296,133L317,119L327,62L291,21L306,-2L306,-2L350,-3L372,7L406,-5L436,9L419,36Z"><title>대덕구</title></path><path fill="#d1e2ce" stroke="#81998f" d="M306,-2L291,21L327,62L317,119L296,133L296,133L277,133L237,170L222,199L225,227L182,296L162,309L162,309L107,278L120,257L120,207L120,207L144,171L150,65L150,65L165,53L208,53L242,11L249,-49L278,-73L297,-60L297,-60L308,-46L306,-2Z"><title>유성구</title></path><path fill="#e2dfc5" stroke="#81998f" d="M296,133L306,170L306,170L285,218L267,296L267,296L254,301L257,380L214,438L214,438L193,378L163,365L144,341L144,341L162,309L162,309L182,296L225,227L222,199L237,170L277,133L296,133Z"><title>서구</title></path><path fill="#c7dedc" stroke="#81998f" d="M306,170L319,180L319,180L375,250L343,267L353,302L342,320L358,350L332,399L332,399L314,392L285,330L289,308L267,296L267,296L285,218L306,170Z"><title>중구</title></path><path fill="#d6dbc9" stroke="#81998f" d="M453,53L488,55L503,97L503,97L465,110L468,138L434,197L429,272L415,317L423,351L423,351L391,375L392,389L359,423L332,399L332,399L358,350L342,320L353,302L343,267L375,250L319,180L319,180L388,153L369,120L377,84L419,36L419,36L436,76L453,53Z"><title>동구</title></path><circle cx="227" cy="144" r="7" fill="#124534"/><text x="217" y="149" text-anchor="end" font-size="20" font-weight="bold">충남대</text><circle cx="379" cy="199" r="7" fill="#124534"/><text x="389" y="204" text-anchor="start" font-size="20" font-weight="bold">용운동</text></svg><figcaption><small>대전 위치도 · 통계청 2013 시군구 경계 · <a href="https://github.com/southkorea/southkorea-maps">원자료</a> · <span id="via">직행</span></small></figcaption></figure><a href="https://map.kakao.com/link/map/충남대,36.363,127.344" target="_blank" rel="noopener">카카오맵에서 열기 ↗</a> <fieldset id="tripFields" disabled><legend>자동차 길찾기</legend><div id="tripPlaces"></div><button id="tripVia" type="button" aria-expanded="false">경유지 추가</button><label><input id="avoidTolls" type="checkbox"> 유료도로 피하기</label><button id="tripSwap" type="button">출발·도착 바꾸기</button></fieldset><div id="tripResults" aria-label="경로 후보"></div><details id="tripDetails" hidden><summary>경로 상세</summary><ol id="tripSteps"></ol></details><button id="roadRoute">실제 도로 경로 조회</button><p id="roadResult" aria-live="polite"></p><div id="atlasMap" style="height:0"></div><small id="tileState">내장 위치도 · 상세 도로지도 연결 중…</small><label><input id="flow" type="checkbox" disabled> 교통상황</label></section><section><b>모의 경로 · 용운동 → 충남대</b><p id="routes"></p><strong id="status"></strong></section><section><small>음성 안내</small><p id="reply" aria-live="polite">“충남대 가자”라고 말해 주세요.</p><button id="mic">음성 시작</button><span id="feedback"></span><form><input aria-label="요청" placeholder="거기 리뷰는? 아까 얘기한 곳 중 싼 곳은?"><button>보내기</button></form><div id="examples"></div></section><button id="traffic">모의 정체 전환</button><button id="pass">추천 매장 진입로 통과</button><p><small>시간·교차로·리뷰·가격·주차 정보는 데모용 예시입니다.</small></p></main><script>
-const el=id=>document.getElementById(id);
-const signalPanel=document.createElement('section');
-signalPanel.setAttribute('aria-labelledby','signalTitle');
-signalPanel.innerHTML=`
- <h2 id="signalTitle" style="font-size:20px;margin:0 0 8px">신호등 정보</h2>
- <details>
-  <summary style="cursor:pointer">지역과 신호등 선택</summary>
-  <div style="display:grid;gap:8px;margin:10px 0">
-   <label>지역 <select id="signalRegion"></select></label>
-   <label id="signalDistrictRow">자치구 <select id="signalDistrict">
-    <option>유성구</option><option>대덕구</option><option>동구</option><option>서구</option><option>중구</option>
-   </select></label>
-   <label id="facilityFilterRow">검색 <input id="facilityFilter" placeholder="주소, 도로명, 관리번호" style="max-width:100%;margin:0"></label>
-   <div>
-    <label><span id="signalCrossingLabel">신호등</span> <select id="signalCrossing" disabled style="max-width:100%"></select></label>
-    <button id="showSignalMap" type="button" hidden>지도에서 보기</button>
-    <button id="refreshSignal" type="button" disabled>다시 조회</button>
-   </div>
-  </div>
-  <p id="signalStatus" role="status"></p>
-  <div id="signalRows"></div>
-  <small><span id="signalSourceNote"></span>
-   <a id="signalSource" target="_blank" rel="noopener noreferrer">공공데이터포털</a>
-  </small>
- </details>`;
-document.querySelector('.atlas').after(signalPanel);
-const signalRegion=el('signalRegion'), signalCrossing=el('signalCrossing');
-const signalStatus=el('signalStatus'), signalRows=el('signalRows'), refreshSignal=el('refreshSignal');
-const showSignalMap=el('showSignalMap'), signalDistrict=el('signalDistrict'), facilityFilter=el('facilityFilter');
-const isDaejeon=()=>signalRegion.value==='3000000000';
-for(const [code,name] of [
- ['30','대전'],['11','서울'],['26','부산'],['27','대구'],['28','인천'],['29','광주'],['31','울산'],
- ['36','세종'],['41','경기'],['51','강원'],['43','충북'],['44','충남'],['52','전북'],['46','전남'],
- ['47','경북'],['48','경남'],['50','제주']
-]) signalRegion.add(new Option(name,code+'00000000'));
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#122625">
+  <title>가는 길에 — 지도</title>
+  <link rel="stylesheet" href="/map.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <main id="workspace" aria-label="가는 길에 지도">
+    <div id="atlasMap" class="map-layer" aria-label="카카오 지도" hidden></div>
+    <canvas id="exampleMap" class="map-layer" role="img" aria-label="대전 예시 지도"></canvas>
+    <aside id="rail" class="rail" aria-label="도구">
+      <div class="rail-brand"><span class="brand-mark" aria-hidden="true">➤</span><span class="rail-name">가는 길에</span></div>
+      <button id="railToggle" class="rail-toggle" type="button" aria-expanded="false" aria-label="사이드바 펼치기" title="사이드바 펼치기"><span aria-hidden="true">☰</span><span class="rail-name">접기</span></button>
+      <nav aria-label="지도 도구">
+        <button type="button" data-panel="route" aria-controls="routePanel" aria-expanded="false" title="경로"><span class="rail-icon" aria-hidden="true">↗</span><span class="rail-name">경로</span></button>
+        <button type="button" data-panel="signals" aria-controls="signalsPanel" aria-expanded="false" title="실제 신호"><span class="rail-icon icon-signal" aria-hidden="true"><i></i></span><span class="rail-name">실제 신호</span></button>
+        <button type="button" data-panel="simulation" aria-controls="simulationPanel" aria-expanded="false" title="모의 주행"><span class="rail-icon icon-play" aria-hidden="true">▷</span><span class="rail-name">모의 주행</span></button>
+        <button type="button" data-panel="voice" aria-controls="voicePanel" aria-expanded="false" title="음성 안내"><span class="rail-icon icon-voice" aria-hidden="true"><i></i></span><span class="rail-name">음성 안내</span></button>
+      </nav>
+    </aside>
 
-let signalIntersections=new Map(), signalRequest=0, signalExpiry, signalMarker, signalMap, signalMaps;
-async function requestSignal(path, params){
- const response=await fetch(path+'?'+new URLSearchParams(params),{signal:AbortSignal.timeout(12000)});
- const data=await response.json();
- if(!response.ok)throw Error(data.error);
- return data;
-}
-function resetSignalDetails(){
- clearTimeout(signalExpiry);
- signalRows.replaceChildren();
-}
-function populateFacilityOptions(){
- const previous=signalCrossing.value;
- const keyword=facilityFilter.value.trim().replace(/\s/g,'').toLowerCase();
- const matches=[...signalIntersections.values()].filter(facility=>
-  [facility.name,facility.road,facility.managementId].some(value=>value.replace(/\s/g,'').toLowerCase().includes(keyword)));
- signalCrossing.replaceChildren(new Option('신호등 선택',''));
- for(const facility of matches.slice(0,100)){
-  signalCrossing.add(new Option(facility.name+' · '+(facility.type||'유형 미제공')+' · '+facility.managementId,facility.id));
- }
- signalCrossing.disabled=!matches.length;
- signalCrossing.value=matches.slice(0,100).some(facility=>facility.id===previous)?previous:'';
- if(previous&&!signalCrossing.value){
-  resetSignalDetails();
-  updateSignalMarker();
- }
- signalStatus.textContent=!matches.length?'검색 조건에 맞는 신호등이 없어요.'
-  :matches.length>100?`신호등 ${matches.length.toLocaleString('ko-KR')}건 중 100건 표시 · 주소나 관리번호로 좁혀 보세요.`
-  :`신호등 ${matches.length.toLocaleString('ko-KR')}건`;
-}
-function updateSignalMarker(){
- signalMarker?.setMap(null);
- const crossing=signalIntersections.get(signalCrossing.value);
- showSignalMap.hidden=!signalMap||!crossing;
- if(showSignalMap.hidden)return;
- const position=new signalMaps.LatLng(crossing.lat,crossing.lng);
- signalMarker=new signalMaps.Marker({map:signalMap,position,title:crossing.name});
-}
-showSignalMap.onclick=()=>{
- signalMap.setLevel(4);
- signalMap.panTo(signalMarker.getPosition());
- el('atlasMap').scrollIntoView({block:'center'});
-};
-async function loadSignalIntersections(){
- const token=++signalRequest;
- const local=isDaejeon();
- el('signalDistrictRow').hidden=!local;
- el('facilityFilterRow').hidden=!local;
- el('signalCrossingLabel').textContent=local?'신호등':'교차로';
- el('signalSource').href='https://www.data.go.kr/data/'+(local?'15110706':'15157604')+'/openapi.do';
- el('signalSourceNote').textContent=local?'대전광역시 설치 현황 · 실시간 잔여시간 미제공':'신호 정보는 제공 시점의 참고값입니다. 실제 신호를 따르세요.';
- resetSignalDetails();
- signalIntersections.clear();
- signalCrossing.replaceChildren(new Option(local?'신호등 선택':'교차로 선택',''));
- signalCrossing.disabled=true;
- facilityFilter.disabled=true;
- refreshSignal.disabled=true;
- updateSignalMarker();
- signalStatus.textContent=local?'신호등 목록을 불러오는 중…':'교차로 목록을 불러오는 중…';
- try{
-  if(local){
-   const data=await requestSignal('/api/traffic-light-facilities',{district:signalDistrict.value});
-   if(token!==signalRequest)return;
-   data.facilities.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
-   for(const facility of data.facilities)signalIntersections.set(facility.id,facility);
-   facilityFilter.disabled=false;
-   populateFacilityOptions();
-   return;
-  }
-  const data=await requestSignal('/api/intersections',{region:signalRegion.value});
-  if(token!==signalRequest)return;
-  data.intersections.sort((a,b)=>Number(b.hasSignals)-Number(a.hasSignals)||a.name.localeCompare(b.name,'ko'));
-  for(const crossing of data.intersections){
-   signalIntersections.set(crossing.id,crossing);
-   signalCrossing.add(new Option(crossing.name+(crossing.hasSignals?' · 신호 정보 있음':''),crossing.id));
-  }
-  signalCrossing.disabled=!signalIntersections.size;
-  signalStatus.textContent=signalIntersections.size?'교차로를 선택하면 신호 정보를 조회합니다.':'이 지역에서 제공되는 교차로 정보가 없어요. 다른 지역을 선택해 주세요.';
- }catch(error){
-  if(token===signalRequest)signalStatus.textContent=error.message||'교차로 목록을 가져오지 못했어요.';
- }finally{
-  if(token===signalRequest)refreshSignal.disabled=false;
- }
-}
-async function loadSignalDetails(){
- const token=++signalRequest;
- const id=signalCrossing.value;
- resetSignalDetails();
- updateSignalMarker();
- if(!id){
-  refreshSignal.disabled=false;
-  if(isDaejeon())populateFacilityOptions();
-  else signalStatus.textContent='교차로를 선택해 주세요.';
-  return;
- }
- if(isDaejeon()){
-  const facility=signalIntersections.get(id);
-  const record=document.createElement('p');
-  record.textContent=[
-   facility.name,
-   facility.road,
-   facility.type,
-   facility.lenses,
-   '관리번호 '+facility.managementId,
-   facility.referenceDate&&'자료 기준 '+facility.referenceDate
-  ].filter(Boolean).join(' · ');
-  signalRows.append(record);
-  return;
- }
- refreshSignal.disabled=true;
- signalStatus.textContent='신호 정보를 조회하는 중…';
- try{
-  const data=await requestSignal('/api/traffic-signals',{region:signalRegion.value,id});
-  if(token!==signalRequest)return;
-  if(!data.signals.length){
-   signalStatus.textContent='이 교차로의 신호 상태를 받지 못했어요.';
-   return;
-  }
-  const observed=Date.parse(data.observedAt);
-  const observedLabel=Number.isFinite(observed)
-   ?'집계 '+new Date(observed).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'})
-   :'집계 시각 미제공';
-  const remainingMs=observed+15000-Date.now();
-  const current=Boolean(data.fresh&&remainingMs>0);
-  const render=fresh=>{
-   signalStatus.textContent=observedLabel+(fresh?' · 조회 시점 잔여시간':' · 최근 신호를 다시 조회해 주세요.');
-   const list=document.createElement('ul');
-   list.style.cssText='max-height:220px;overflow:auto;padding-left:22px';
-   for(const signal of data.signals){
-    const item=document.createElement('li');
-    item.textContent=signal.direction+' '+signal.movement+' · '+signal.state;
-    if(fresh&&signal.seconds!==null)item.textContent+=' · '+signal.seconds+'초';
-    list.append(item);
-   }
-   signalRows.replaceChildren(list);
-  };
-  render(current);
-  if(current)signalExpiry=setTimeout(()=>render(false),remainingMs);
- }catch(error){
-  if(token===signalRequest)signalStatus.textContent=error.message||'신호 정보를 가져오지 못했어요.';
- }finally{
-  if(token===signalRequest)refreshSignal.disabled=false;
- }
-}
-signalPanel.querySelector('details').addEventListener('toggle',event=>{
- if(event.currentTarget.open&&!signalRequest)loadSignalIntersections();
-});
-signalRegion.onchange=signalDistrict.onchange=()=>{
- facilityFilter.value='';
- loadSignalIntersections();
-};
-facilityFilter.oninput=populateFacilityOptions;
-signalCrossing.onchange=loadSignalDetails;
-refreshSignal.onclick=()=>!isDaejeon()&&signalCrossing.value?loadSignalDetails():loadSignalIntersections();
-const shops={맥도날드:[8,'유턴이 필요하고 드라이브스루가 있어요.','가격과 리뷰는 미확인이에요.'],버거집A:[3,'오른쪽으로 진입하고 주차장이 있어요.','세트 8천 원대, 방문자 리뷰 320개, 별점 4.3점(5점 만점)이에요.'],편의점:[2,'같은 방향으로 복귀하고 주차장이 있어요.','5천 원 이내 식사 조합이 있어요. 리뷰는 미확인이에요.']};
-const discussed=new Set(); let focus='',food='';
-const details={맥도날드:{price:9000,review:'감자튀김이 따뜻하다는 평이 있어요. 세트는 9천 원이고 드라이브스루가 있어요. 주차장 크기는 미확인이에요.'},버거집A:{price:8000,review:'주차장이 넓고 차를 대기 편하다는 평이 많아요. 세트는 8천 원, 방문자 리뷰 320개에 별점은 4.3/5예요.'},편의점:{price:4500,review:'가격이 저렴하다는 평이 있어요. 주먹밥·음료 조합은 4,500원이고 주차장은 좁은 편이에요.'}};
-let route='',pending='',stop='',proposal='',jam=false,passed=new Set(),voice=false;
-function fastest(){return jam?'큰길':'도심길'}
-function render(){el('via').textContent=stop||route||'직행';el('routes').textContent='도심길 '+(jam?33:24)+'분 · 신호 교차로 12곳　/　큰길 26분 · 5곳';el('status').textContent=route?route+' 안내 중'+(stop?' · '+stop+' 경유':' · 직행'):'경로 선택 전'}
-function say(s){el('reply').textContent=s;if(voice&&window.speechSynthesis){speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(s);u.lang='ko-KR';speechSynthesis.speak(u)}render()}
-const branches=['맥도날드 A점','맥도날드 B점'];
-shops[branches[0]]=[4,'진행 방향에서 진입해요.',''];shops[branches[1]]=shops.맥도날드;
-for(const b of branches)details[b]={...details.맥도날드,review:b===branches[0]?'세트는 9천 원이고 진행 방향에서 진입해요. 주차장 크기와 리뷰는 미확인이에요.':details.맥도날드.review};
-delete details.맥도날드;
-function handle(q){q=q.trim();if(!q)return;
-if(/취소|그냥 학교|직행/.test(q)){pending=stop=proposal='';return say('경유 요청을 취소했어요.')}
-if(/^(응|그래|좋아|거기로|확정)/.test(q)){if(pending){stop=pending;focus=stop;pending='';return say(stop+' 경유를 적용했어요.')}if(proposal){route=proposal;proposal='';return say(route+'로 안내할게요.')}return say('현재 확인할 제안이 없어요.')}
-const other=/다른\s*(데|곳|지점)/.test(q);
-const openBrand=/고민|애매|망설|다른\s*(버거|햄버거|브랜드|가게)|버거면/.test(q);
-const mc=/맥날|맥도날드|감튀/.test(q);
-if((mc||branches.includes(focus)&&(other||openBrand))&&!/리뷰|가격|후기|주차|싼|저렴/.test(q)){
- if(!route)return say('먼저 충남대까지 갈 경로를 정해 주세요.');
- let available=branches.filter(b=>!passed.has(b));
- let choice=openBrand?'버거집A':other?available.find(b=>b!==focus):available[0];
- if(!choice||passed.has(choice)){pending='';return say('현재 경로에서 다른 후보를 찾지 못했어요.')}
- pending=focus=choice;proposal='';food='버거';discussed.add(choice);
- if(openBrand)return say('버거집 A도 있어요. 3분 추가이고 오른쪽으로 들어갈 수 있어요. 여기에 들를까요?');
- const base=route==='큰길'?26:jam?33:24;
- for(const b of available)discussed.add(b);
- return say(available.map(b=>b+'을 거치면 충남대까지 '+(base+shops[b][0])+'분').join(', ')+'. '+choice+'으로 갈까요?');
-}
-const named=/편의점/.test(q)?'편의점':/버거집\s*A/i.test(q)?'버거집A':/맥날|맥도날드/.test(q)?(branches.includes(focus)?focus:branches[0]):'';
-const cheap=/싼|싸게|저렴|가성비|싼데/.test(q);
-if(!cheap&&/리뷰|후기|별점|가격|얼마|주차|평이/.test(q)){
- const target=named||focus||pending||stop;
- if(!target)return say('어느 곳의 리뷰가 궁금해요?');
- focus=target;discussed.add(target);
- return say(target+'은요. '+details[target].review);
-}
-if(cheap||named||/버거|네가 골라|감튀/.test(q)){
- if(!route)return say('먼저 충남대까지 갈 경로를 정해 주세요.');
- let name,reason='';
- if(cheap){
- const broad=/아무거나|음식 상관없|편의점도|다른 음식/.test(q);
- const prior=/지금까지|지금 나온|얘기한|그중|중에서/.test(q);
- let pool=broad?Object.keys(details):Array.from(discussed);
- if(named&&!broad&&!prior)pool=[named];
- if(!prior&&!broad&&food==='버거'&&!named)pool=pool.filter(n=>n!=='편의점');
- pool=pool.filter(n=>!passed.has(n)).sort((x,y)=>details[x].price-details[y].price);
- if(!pool.length)return say('버거 중에서 찾을까요, 편의점까지 볼까요?');
- name=pool[0];reason=(pool.length>1?pool.join('·')+' 중에서는 ':'지금 비교 범위에서는 ')+name+'이 '+details[name].price.toLocaleString('ko-KR')+'원이에요. ';
- }else if(named==='편의점'){food='편의점';name=named}
- else{food='버거';name=/감튀|맥날 꼭/.test(q)?'맥도날드':'버거집A';if(named==='맥도날드'&&name!==named){discussed.add(named);reason='맥날은 유턴해야 하고 8분 더 걸려요. '}}
- pending=proposal='';if(passed.has(name))return say('그 매장 진입로는 지났어요.');
- discussed.add(name);focus=pending=name;
- return say(reason+name+'은 '+shops[name][0]+'분 추가예요. '+shops[name][1]+' 들를까요?');
-}
-if(/충남대|신호|빨리|빠른|큰길/.test(q)){pending='';proposal=/신호|큰길/.test(q)?'큰길':fastest();return say(proposal+'을 추천해요. '+el('routes').textContent+'예요. 이 길로 갈까요?')}
-say('빠른 길, 신호 적은 길, 또는 들르고 싶은 곳을 말해 주세요.')}
-document.querySelector('form').onsubmit=e=>{e.preventDefault();let i=document.querySelector('form input');handle(i.value);i.value=''};
-for(const s of ['충남대 가자','신호 적은 길','응','맥날 가자','다른 데는?','고민되네','거기 리뷰는?','싼 곳으로','그냥 학교 가자']){let b=document.createElement('button');b.textContent=s;b.onclick=()=>handle(s);el('examples').append(b)}
-el('traffic').onclick=()=>{jam=!jam;pending=proposal='';render();say('교통이 바뀌었어요. 지금 가장 빠른 길은 '+fastest()+'이에요. 빠른 길로 바꿀까요?');proposal=fastest()};
-el('pass').onclick=()=>{if(pending){passed.add(pending);pending='';say('진입로를 지나 이전 추천을 취소했어요.')}else say('현재 추천 중인 매장이 없어요.')};
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-el('mic').onclick=()=>{if(!SR)return say('이 브라우저에서는 버튼이나 입력창으로 시험해 주세요.');if(voice){voice=false;window.rec.stop();window.speechSynthesis?.cancel();el('mic').textContent='음성 시작';return}let rec=new SR();window.rec=rec;rec.lang='ko-KR';rec.continuous=true;rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal&&!window.speechSynthesis?.speaking)handle(e.results[i][0].transcript)};rec.onerror=e=>{voice=false;el('feedback').textContent='음성 인식 중단 · '+e.error};rec.onend=()=>{if(voice){try{rec.start();return}catch{voice=false}}el('mic').textContent='음성 시작'};try{rec.start();voice=true;el('mic').textContent='음성 종료'}catch{say('마이크를 시작할 수 없어요.')}};render()
-</script><script>
-const mapStatus=el('tileState');
-el('roadRoute').disabled=true;
-function loadMap(key){
- mapStatus.textContent='카카오 지도 연결 중…';
- const sdk=document.createElement('script');let active=true;
- let stage='SDK 다운로드';
- function fail(reason){
- if(!active)return;
- active=false;clearTimeout(timeout);sdk.remove();
- mapStatus.textContent='카카오 지도 연결 실패 ['+stage+'] · '+reason;
- }
- const timeout=setTimeout(()=>fail('응답 시간이 초과됐어요.'),15000);
- sdk.onerror=()=>fail('카카오 SDK 요청이 실패했어요. 브라우저 네트워크 탭에서 응답 상태를 확인해 주세요.');
- sdk.onload=()=>{
- stage='SDK 초기화';
- if(typeof window.kakao?.maps?.load!=='function')return fail('SDK가 초기화 함수를 제공하지 않았어요.');
- try{kakao.maps.load(()=>{if(!active)return;
- stage='지도 생성';
- try{
- const k=kakao.maps,canvas=el('atlasMap');canvas.style.height='350px';
- const map=new k.Map(canvas,{center:new k.LatLng(36.4,127.8),level:13});
- signalMap=map;signalMaps=k;updateSignalMarker();
- map.addControl(new k.ZoomControl(),k.ControlPosition.RIGHT);
- const theme=el('theme');theme.onchange=()=>map.setMapTypeId(k.MapTypeId[theme.value]);theme.onchange();
- const flow=el('flow');flow.disabled=false;flow.onchange=()=>flow.checked?map.addOverlayMapTypeId(k.MapTypeId.TRAFFIC):map.removeOverlayMapTypeId(k.MapTypeId.TRAFFIC);
-const fields=el('tripFields'), report=el('roadResult'), search=el('roadRoute'), list=el('tripResults');
- const places=new k.services.Places(), geocoder=new k.services.Geocoder(), slots={};let revision=0,lines=[],markers=[];const details=el('tripDetails'),steps=el('tripSteps');
- function lookup(query,callback){
- places.keywordSearch(query,(data,status)=>{
- if(status!==k.services.Status.ZERO_RESULT){callback(data||[],status);return}
- geocoder.addressSearch(query,(addresses,addressStatus)=>callback((addresses||[]).map(place=>({...place,place_name:place.address_name})),addressStatus));
- });
- }
- function setPlace(slot,place){
- slot.query++;clearTimeout(slot.timer);slot.value=place;slot.input.value=place.place_name;slot.results.replaceChildren();invalidate();
- }
- function invalidate(){revision++;search.disabled=false;list.replaceChildren();details.hidden=true;details.open=false;steps.replaceChildren();for(const marker of markers)marker.setMap(null);markers=[];for(const line of lines)line.setMap(null);lines=[];report.textContent='장소를 확정한 뒤 경로를 조회하세요.'}
- for(const [id,label] of [['start','출발지'],['via','경유지 (선택)'],['end','도착지']]){
- const row=document.createElement('div'), title=document.createElement('label'), input=document.createElement('input'), results=document.createElement('div');
- title.textContent=label;title.append(input);row.append(title,results);el('tripPlaces').append(row);
- const slot=slots[id]={row,input,results,value:null,query:0,timer:null};
- input.oninput=()=>{slot.value=null;invalidate();clearTimeout(slot.timer);const token=++slot.query, q=input.value.trim();results.replaceChildren();if(q.length<2)return;
- slot.timer=setTimeout(()=>lookup(q,(data,status)=>{if(token!==slot.query)return;
- results.replaceChildren();if(status!==k.services.Status.OK){results.textContent=status===k.services.Status.ZERO_RESULT?'검색 결과가 없어요.':'장소 검색에 실패했어요.';return}
- for(const place of data.slice(0,5)){const b=document.createElement('button');b.type='button';b.textContent=place.place_name+' · '+(place.road_address_name||place.address_name);b.onclick=()=>setPlace(slot,place);results.append(b)}
- }),300)};
- }
- slots.via.row.hidden=true;
- const viaToggle=el('tripVia');
- viaToggle.onclick=()=>{
- const slot=slots.via;const opening=slot.row.hidden;
- slot.row.hidden=!opening;viaToggle.setAttribute('aria-expanded',String(opening));viaToggle.textContent=opening?'경유지 삭제':'경유지 추가';
- if(opening){slot.input.focus();return}
- slot.query++;clearTimeout(slot.timer);slot.value=null;slot.input.value='';slot.results.replaceChildren();invalidate();
- };
- el('tripSwap').onclick=()=>{const a=slots.start,b=slots.end;[a.value,b.value]=[b.value,a.value];[a.input.value,b.input.value]=[b.input.value,a.input.value];for(const slot of [a,b]){slot.query++;clearTimeout(slot.timer);slot.results.replaceChildren()}invalidate()};
- const tools=document.createElement('section');
- tools.innerHTML='<form><input aria-label="장소 이름 또는 주소" placeholder="장소 이름 또는 주소"><button>검색</button></form><button type="button" data-locate>현재 위치</button><p role="status"></p><div data-results></div><div data-place hidden><strong></strong> <a target="_blank" rel="noopener noreferrer">장소 상세</a><div><button data-slot="start">출발지로</button><button data-slot="via">경유지로</button><button data-slot="end">도착지로</button></div></div>';
- canvas.before(tools);
- const form=tools.querySelector('form'), query=form.querySelector('input'), message=tools.querySelector('p');
- const results=tools.querySelector('[data-results]'), card=tools.querySelector('[data-place]'), pin=new k.Marker();
- let selected=null,queryVersion=0;
- function showPlace(place,zoom){
- selected=place;
- const position=new k.LatLng(Number(place.y),Number(place.x));
- pin.setPosition(position);pin.setMap(map);
- if(zoom){map.setLevel(4);map.panTo(position)}
- const address=place.road_address_name||place.address_name;
- card.querySelector('strong').textContent=address&&address!==place.place_name?place.place_name+' · '+address:place.place_name;
- const link=card.querySelector('a');
- link.hidden=!/^https?:\/\/place\.map\.kakao\.com\/\d+/.test(place.place_url||'');
- if(!link.hidden)link.href=place.place_url;
- card.hidden=false;
- }
- for(const button of card.querySelectorAll('[data-slot]'))button.onclick=()=>{
- const id=button.dataset.slot;
- if(id==='via'&&slots.via.row.hidden)viaToggle.click();
- setPlace(slots[id],selected);
- };
- query.oninput=()=>{queryVersion++;results.replaceChildren();message.textContent=''};
- form.onsubmit=event=>{
- event.preventDefault();
- const keyword=query.value.trim(),token=++queryVersion;
- results.replaceChildren();
- if(!keyword){message.textContent='장소 이름이나 주소를 입력하세요.';return}
- message.textContent='장소 검색 중…';
- lookup(keyword,(data,status)=>{
- if(token!==queryVersion)return;
- message.textContent=status===k.services.Status.OK?'':status===k.services.Status.ZERO_RESULT?'검색 결과가 없어요.':'장소 검색에 실패했어요.';
- for(const place of data){
- const button=document.createElement('button');button.type='button';
- button.textContent=place.place_name+(place.address_name&&place.address_name!==place.place_name?' · '+place.address_name:'');
- button.onclick=()=>showPlace(place,true);results.append(button);
- }
- });
- };
- k.event.addListener(map,'click',event=>{
- const x=event.latLng.getLng(),y=event.latLng.getLat();
- const point={x,y,place_name:y.toFixed(5)+', '+x.toFixed(5)};
- showPlace(point,false);
- geocoder.coord2Address(x,y,(data,status)=>{
- if(selected!==point||status!==k.services.Status.OK)return;
- const address=data[0]?.road_address?.address_name||data[0]?.address?.address_name;
- if(address)showPlace({...point,place_name:address},false);
- });
- });
- tools.querySelector('[data-locate]').onclick=()=>{
- if(!navigator.geolocation){message.textContent='현재 위치를 지원하지 않는 환경이에요.';return}
- message.textContent='현재 위치 확인 중…';
- navigator.geolocation.getCurrentPosition(({coords})=>{
- message.textContent='';showPlace({x:coords.longitude,y:coords.latitude,place_name:'현재 위치'},true);
- },()=>{message.textContent='현재 위치를 확인하지 못했어요. 위치 권한을 확인해 주세요.'},{timeout:10000});
- };
- el('avoidTolls').onchange=invalidate; fields.disabled=false;search.disabled=false;
- search.onclick=async()=>{
- if(!slots.start.value||!slots.end.value||slots.via.input.value.trim()&&!slots.via.value){report.textContent='검색 결과에서 출발지·도착지와 입력한 경유지를 선택하세요.';return}
- const trip=[slots.start.value,slots.via.value,slots.end.value].filter(Boolean);
- if(new Set(trip.map(p=>p.x+','+p.y)).size!==trip.length){report.textContent='서로 다른 장소를 선택하세요.';return}
- const token=++revision;search.disabled=true;report.textContent='자동차 경로 조회 중…';
- try{
- const point=p=>Number(p.x)+','+Number(p.y);
- const params=new URLSearchParams({origin:point(trip[0]),destination:point(trip[trip.length-1]),avoidTolls:String(el('avoidTolls').checked)});
- if(trip.length===3)params.set('via',point(trip[1]));
- const response=await fetch('/api/routes?'+params,{signal:AbortSignal.timeout(12000)});
- const data=await response.json();if(token!==revision)return;
- if(!response.ok)throw Error(data.error||'경로 조회에 실패했어요.');
- const paths=data.routes.map(r=>r.sections.flatMap(section=>(section.roads||[]).flatMap(road=>{
- const pairs=[];for(let i=0;i+1<road.vertexes.length;i+=2)pairs.push(new k.LatLng(road.vertexes[i+1],road.vertexes[i]));return pairs;
- })));
- for(const line of lines)line.setMap(null);for(const marker of markers)marker.setMap(null);
- markers=trip.map(p=>new k.Marker({map,position:new k.LatLng(Number(p.y),Number(p.x)),title:p.place_name}));
- lines=paths.map(path=>new k.Polyline({map,path,strokeWeight:5,strokeColor:'#9aa9bd'}));list.replaceChildren();
-  function select(i){
- steps.replaceChildren();
- for(const leg of data.routes[i].sections||[])for(const step of leg.roads||[]){
- if(step.distance<1)continue;
- const item=document.createElement('li');
- item.textContent=(step.name||'도로명 미제공')+' · '+Math.round(step.distance).toLocaleString('ko-KR')+'m'+(step.traffic_speed>0?' · 교통 평균 '+Math.round(step.traffic_speed)+'km/h':' · 교통 속도 미제공');
- steps.append(item)
- }
- if(!steps.childElementCount){const item=document.createElement('li');item.textContent='표시할 상세 구간이 없어요.';steps.append(item)}
- details.hidden=false;
- lines.forEach((line,j)=>{line.setOptions({strokeColor:i===j?'#285ddd':'#9aa9bd',strokeWeight:i===j?7:4});line.setZIndex(i===j?2:1)});Array.from(list.children).forEach((b,j)=>b.setAttribute('aria-pressed',String(i===j)));const bounds=new k.LatLngBounds();paths[i].forEach(p=>bounds.extend(p));map.setBounds(bounds)}
- data.routes.forEach((r,i)=>{const b=document.createElement('button');b.textContent='경로 '+(i+1)+' · '+Math.round(r.summary.duration/60)+'분 · '+(r.summary.distance/1000).toFixed(1)+'km · '+(Number.isFinite(r.summary.fare?.toll)?'통행료 '+r.summary.fare.toll.toLocaleString('ko-KR')+'원':'통행료 미제공');b.onclick=()=>select(i);list.append(b)});
- select(0);report.textContent='카카오모빌리티 · 교통 반영 조회 '+new Date(data.fetchedAt).toLocaleTimeString('ko-KR');
- }catch(error){if(token===revision)report.textContent=error.message||'경로 조회에 실패했어요. 다시 시도해 주세요.'}finally{if(token===revision)search.disabled=false}
- };
-  clearTimeout(timeout);active=false;el('backupMap').hidden=true;mapStatus.textContent='카카오 지도 · 국내 장소와 자동차 길찾기';
- }catch(error){fail(error instanceof Error?error.name:'지도 초기화 오류')}
- });
- }catch(error){fail(error instanceof Error?error.name:'SDK 초기화 오류')}
- };
- sdk.src='https://dapi.kakao.com/v2/maps/sdk.js?autoload=false&libraries=services&appkey='+encodeURIComponent(key);document.head.append(sdk)
-}
-async function initializeMap(){
- if(!/^https?:$/.test(location.protocol)){
- mapStatus.textContent='웹 서버에서 열면 카카오 지도가 자동으로 연결돼요.';
- return;
- }
- mapStatus.textContent='지도 서버 설정 확인 중…';
- try{
- const response=await fetch('/api/map-config',{signal:AbortSignal.timeout(5000)});
- if(!response.ok)throw Error('Map configuration unavailable');
- const {javascriptKey}=await response.json();
- if(!javascriptKey){
- mapStatus.textContent='지도 서버에 JavaScript 키가 설정되지 않았어요.';
- return;
- }
- loadMap(javascriptKey);
- }catch{
- mapStatus.textContent='지도 서버 설정을 불러오지 못했어요. 잠시 후 새로고침해 주세요.';
- }
-}
-initializeMap();
-</script></html>
+    <header class="map-header">
+      <div class="map-legend">
+        <span class="legend-dot" aria-hidden="true"></span>
+        <div><span id="mapMode">예시 지도</span><small id="tileState" role="status">지도 연결 확인 중</small></div>
+      </div>
+      <button id="mapSwitch" class="map-action" type="button" hidden>카카오 지도</button>
+      <button id="gpsButton" class="map-action gps" type="button"><span aria-hidden="true">⌖</span> <span>GPS 시작</span></button>
+    </header>
+    <div class="map-zoom" aria-label="지도 크기">
+      <button id="zoomIn" type="button" aria-label="확대">+</button>
+      <button id="zoomOut" type="button" aria-label="축소">−</button>
+    </div>
+    <div id="mapCredit" class="map-credit">예시 지도 · 개략도</div>
+
+    <aside id="toolPanel" class="tool-panel" aria-label="선택한 지도 도구" hidden>
+      <button id="closePanel" class="close-panel" type="button" aria-label="패널 닫기">×</button>
+      <section id="routePanel" data-view="route" aria-labelledby="routeTitle" hidden>
+        <div class="panel-heading"><span class="panel-icon" aria-hidden="true">↗</span><div><h1 id="routeTitle" tabindex="-1">자동차 경로</h1><p>출발지와 도착지를 선택하세요.</p></div></div>
+        <div id="routeContent"></div>
+      </section>
+      <section id="signalsPanel" data-view="signals" aria-labelledby="signalTitle" hidden>
+        <div class="panel-heading"><span class="panel-icon actual" aria-hidden="true">●</span><div><h1 id="signalTitle" tabindex="-1">실제 신호 관찰</h1><p>공공데이터포털 조회</p></div></div>
+        <div class="field-grid">
+          <label class="field">지역 <select id="signalRegion"></select></label>
+          <label class="field" id="signalDistrictRow">자치구 <select id="signalDistrict"><option>유성구</option><option>대덕구</option><option>동구</option><option>서구</option><option>중구</option></select></label>
+          <label class="field" id="facilityFilterRow">신호등 검색 <input id="facilityFilter" placeholder="주소, 도로명, 관리번호" autocomplete="off"></label>
+          <label class="field"><span id="signalCrossingLabel">신호등</span> <select id="signalCrossing" disabled></select></label>
+        </div>
+        <div class="inline-actions">
+          <button id="refreshSignal" class="secondary" type="button" disabled>다시 조회</button>
+          <button id="showSignalMap" class="secondary" type="button" hidden>지도에서 보기</button>
+        </div>
+        <p id="signalStatus" class="status" role="status"></p>
+        <div id="signalRows"></div>
+        <p class="source"><span id="signalSourceNote"></span> <a id="signalSource" target="_blank" rel="noopener noreferrer">원본 데이터</a></p>
+      </section>
+      <section id="simulationPanel" data-view="simulation" aria-labelledby="simulationTitle" hidden>
+        <div class="panel-heading"><span class="panel-icon simulated" aria-hidden="true">▷</span><div><h1 id="simulationTitle" tabindex="-1">주행 시뮬레이션</h1><p>가상 차량 · 테스트 신호</p></div></div>
+        <div id="simulationContent"></div>
+      </section>
+      <section id="voicePanel" data-view="voice" aria-labelledby="voiceTitle" hidden>
+        <div class="panel-heading"><span class="panel-icon voice" aria-hidden="true">◉</span><div><h1 id="voiceTitle" tabindex="-1">음성 안내</h1><p>경로 요약을 듣거나 모의 주행을 시작하세요.</p></div></div>
+        <button id="readRoute" class="primary" type="button">선택한 경로 읽기</button>
+        <button id="mic" class="secondary" type="button" aria-pressed="false">마이크로 말하기</button>
+        <form id="voiceForm" class="voice-form">
+          <label class="field">텍스트 명령 <input id="voiceInput" placeholder="예: 경로 읽어 줘" autocomplete="off"></label>
+          <button class="secondary" type="submit">보내기</button>
+        </form>
+        <p id="voiceStatus" class="status" role="status"></p>
+      </section>
+    </aside>
+
+    <section id="playback" class="playback" aria-label="모의 주행 재생" hidden></section>
+    <button id="sampleShortcut" class="sample-shortcut" type="button"><span aria-hidden="true">▶</span> 예시 주행</button>
+  </main>
+</body>
+</html>
