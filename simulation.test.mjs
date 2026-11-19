@@ -58,3 +58,19 @@ test('uses route geometry length and rejects an undrivable path', () => {
   const atNineSeconds = sampleDrive(drive,9);
   assert.ok(Math.abs(atNineSeconds.position.lng-127.4054)<0.0001);
 });
+
+test('a Kakao road route replays its geometry with the provider duration and no test signal stops', () => {
+  const drive = createDrive({
+    points, durationSeconds:120, distanceMeters:5600, tripLabel:'서울시청 → 서울역'
+  },{testSignalStops:false});
+  const midpoint = sampleDrive(drive,60);
+  assert.equal(drive.name,'서울시청 → 서울역');
+  assert.equal(drive.totalSeconds,120);
+  assert.equal(midpoint.stage,'driving');
+  assert.equal(midpoint.waitSeconds,0);
+  assert.deepEqual(midpoint.stops,[]);
+  assert.ok(Math.abs(midpoint.position.lng-127.43)<0.0001);
+  const arrival = sampleDrive(drive,120);
+  assert.equal(arrival.stage,'arrived');
+  assert.deepEqual(arrival.position,points.at(-1));
+});

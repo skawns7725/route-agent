@@ -8,9 +8,9 @@ const signalPaths = new Set(['/api/intersections','/api/traffic-signals','/api/t
 const routePaths = new Set(['/api/routes','/api/route-comparison']);
 const assets = new Map([
   ['/','route-agent-demo.html'], ['/route-agent-demo.html','route-agent-demo.html'],
-  ...['app.js','map-view.js','signals.js','simulation.js','routing.js','map.css'].map(name=>['/'+name,name])
+  ...['app.js','map-view.js','signals.js','simulation.js','routing.js','driving.mjs','map.css'].map(name=>['/'+name,name])
 ]);
-const types = {'.html':'text/html','.js':'text/javascript','.css':'text/css'};
+const types = {'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css'};
 
 function json(res, status, payload) {
   res.writeHead(status, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});

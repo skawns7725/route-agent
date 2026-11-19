@@ -11,14 +11,17 @@
 <body>
   <main id="workspace" aria-label="가는 길에 지도">
     <div id="atlasMap" class="map-layer" aria-label="카카오 지도" hidden></div>
-    <canvas id="exampleMap" class="map-layer" role="img" aria-label="대전 예시 지도"></canvas>
+    <canvas id="exampleMap" class="map-layer" role="img" aria-label="대전 예시 지도" hidden></canvas>
+    <div id="mapPlaceholder" class="map-placeholder">
+      <div><strong>카카오 지도</strong><p id="mapPlaceholderStatus">지도 연결 확인 중</p><button id="retryMap" class="secondary" type="button" hidden>다시 연결</button></div>
+    </div>
     <aside id="rail" class="rail" aria-label="도구">
       <div class="rail-brand"><span class="brand-mark" aria-hidden="true">➤</span><span class="rail-name">가는 길에</span></div>
       <button id="railToggle" class="rail-toggle" type="button" aria-expanded="false" aria-label="사이드바 펼치기" title="사이드바 펼치기"><span aria-hidden="true">☰</span><span class="rail-name">접기</span></button>
       <nav aria-label="지도 도구">
         <button type="button" data-panel="route" aria-controls="routePanel" aria-expanded="false" title="경로"><span class="rail-icon" aria-hidden="true">↗</span><span class="rail-name">경로</span></button>
         <button type="button" data-panel="signals" aria-controls="signalsPanel" aria-expanded="false" title="실제 신호"><span class="rail-icon icon-signal" aria-hidden="true"><i></i></span><span class="rail-name">실제 신호</span></button>
-        <button type="button" data-panel="simulation" aria-controls="simulationPanel" aria-expanded="false" title="모의 주행"><span class="rail-icon icon-play" aria-hidden="true">▷</span><span class="rail-name">모의 주행</span></button>
+        <button type="button" data-panel="simulation" aria-controls="simulationPanel" aria-expanded="false" title="모의 주행"><span class="rail-icon" aria-hidden="true">▷</span><span class="rail-name">모의 주행</span></button>
         <button type="button" data-panel="voice" aria-controls="voicePanel" aria-expanded="false" title="음성 안내"><span class="rail-icon icon-voice" aria-hidden="true"><i></i></span><span class="rail-name">음성 안내</span></button>
       </nav>
     </aside>
@@ -26,7 +29,7 @@
     <header class="map-header">
       <div class="map-legend">
         <span class="legend-dot" aria-hidden="true"></span>
-        <div><span id="mapMode">예시 지도</span><small id="tileState" role="status">지도 연결 확인 중</small></div>
+        <div><span id="mapMode">카카오 지도</span><small id="tileState" role="status">지도 연결 확인 중</small></div>
       </div>
       <button id="mapSwitch" class="map-action" type="button" hidden>카카오 지도</button>
       <button id="gpsButton" class="map-action gps" type="button"><span aria-hidden="true">⌖</span> <span>GPS 시작</span></button>
@@ -35,7 +38,7 @@
       <button id="zoomIn" type="button" aria-label="확대">+</button>
       <button id="zoomOut" type="button" aria-label="축소">−</button>
     </div>
-    <div id="mapCredit" class="map-credit">예시 지도 · 개략도</div>
+    <div id="mapCredit" class="map-credit" hidden>오프라인 예시 · 개략도</div>
 
     <aside id="toolPanel" class="tool-panel" aria-label="선택한 지도 도구" hidden>
       <button id="closePanel" class="close-panel" type="button" aria-label="패널 닫기">×</button>
@@ -59,12 +62,16 @@
         <div id="signalRows"></div>
         <p class="source"><span id="signalSourceNote"></span> <a id="signalSource" target="_blank" rel="noopener noreferrer">원본 데이터</a></p>
       </section>
+      <section id="drivingPanel" data-view="driving" aria-labelledby="drivingTitle" hidden>
+        <div class="panel-heading"><span class="panel-icon" aria-hidden="true">⌖</span><div><h1 id="drivingTitle" tabindex="-1">실제 GPS 주행</h1><p>카카오 경로 위에 현재 위치를 표시합니다.</p></div></div>
+        <div id="drivingContent"></div>
+      </section>
       <section id="simulationPanel" data-view="simulation" aria-labelledby="simulationTitle" hidden>
-        <div class="panel-heading"><span class="panel-icon simulated" aria-hidden="true">▷</span><div><h1 id="simulationTitle" tabindex="-1">주행 시뮬레이션</h1><p>가상 차량 · 테스트 신호</p></div></div>
+        <div class="panel-heading"><span class="panel-icon simulated" aria-hidden="true">▷</span><div><h1 id="simulationTitle" tabindex="-1">모의 주행</h1><p>카카오 도로 경로 · GPS 권한 없이 재생</p></div></div>
         <div id="simulationContent"></div>
       </section>
       <section id="voicePanel" data-view="voice" aria-labelledby="voiceTitle" hidden>
-        <div class="panel-heading"><span class="panel-icon voice" aria-hidden="true">◉</span><div><h1 id="voiceTitle" tabindex="-1">음성 안내</h1><p>경로 요약을 듣거나 모의 주행을 시작하세요.</p></div></div>
+        <div class="panel-heading"><span class="panel-icon voice" aria-hidden="true">◉</span><div><h1 id="voiceTitle" tabindex="-1">음성 안내</h1><p>선택한 경로의 요약을 들을 수 있습니다.</p></div></div>
         <button id="readRoute" class="primary" type="button">선택한 경로 읽기</button>
         <button id="mic" class="secondary" type="button" aria-pressed="false">마이크로 말하기</button>
         <form id="voiceForm" class="voice-form">
@@ -76,7 +83,8 @@
     </aside>
 
     <section id="playback" class="playback" aria-label="모의 주행 재생" hidden></section>
-    <button id="sampleShortcut" class="sample-shortcut" type="button"><span aria-hidden="true">▶</span> 예시 주행</button>
+    <section id="drivingDock" class="playback live-drive" aria-label="실제 GPS 주행 상태" hidden></section>
+    <button id="sampleShortcut" class="sample-shortcut" type="button" hidden><span aria-hidden="true">▶</span> 오프라인 예시</button>
   </main>
 </body>
 </html>

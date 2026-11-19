@@ -2,12 +2,14 @@ import {createMap} from './map-view.js';
 import {initRouting} from './routing.js';
 import {initSignals} from './signals.js';
 import {exampleRoute, initSimulation} from './simulation.js';
+import {initDriving} from './driving.mjs';
 
 const el = id=>document.getElementById(id);
 const workspace = el('workspace');
 const panel = el('toolPanel');
 const railToggle = el('railToggle');
 const playback = el('playback');
+const drivingDock = el('drivingDock');
 const sampleShortcut = el('sampleShortcut');
 const buttons = [...document.querySelectorAll('[data-panel]')];
 const views = [...panel.querySelectorAll('[data-view]')];
@@ -31,17 +33,29 @@ function setPanel(name, focus = true) {
   map.redraw();
 }
 function openPanel(name, {playing = false} = {}) {
+  if (playing && name === 'driving') simulation.stop();
+  if (playing && name === 'simulation' && !drivingDock.hidden) driving.stop();
   if (playing && matchMedia('(max-width: 720px)').matches) {
     setPanel(null,false);
-    el('playbackToggle').focus({preventScroll:true});
+    el(name === 'driving' ? 'driveStop' : 'playbackToggle').focus({preventScroll:true});
     return;
   }
   setPanel(name);
 }
 const closePanel = ()=>setPanel(null);
 const simulation = initSimulation({map,openPanel});
-const routing = initRouting({map,openPanel,setRoadRoute:simulation.setRoadRoute});
+const driving = initDriving({map,openPanel});
+const routing = initRouting({
+  map,openPanel,startDrive:driving.start,startSimulation:simulation.playRoadRoute,
+  setRoadRoute(route) {
+    driving.setRoute(route);
+    simulation.setRoadRoute(route);
+  }
+});
 const loadSignals = initSignals({map,closePanel});
+map.onReady(()=>{
+  simulation.stopOffline();
+});
 
 for (const button of buttons) {
   button.setAttribute('aria-label',button.title);
@@ -60,11 +74,14 @@ document.addEventListener('keydown',event=>{
 });
 el('gpsButton').onclick = ()=>routing.focusGps();
 sampleShortcut.onclick = ()=>simulation.playExample();
-new ResizeObserver(()=>{
-  workspace.style.setProperty('--dock-height',playback.hidden ? '0px' : playback.offsetHeight+4+'px');
-  sampleShortcut.hidden = !playback.hidden;
+const dockLayout = new ResizeObserver(()=>{
+  const dock = drivingDock.hidden ? playback : drivingDock;
+  workspace.style.setProperty('--dock-height',dock.hidden ? '0px' : dock.offsetHeight+4+'px');
+  sampleShortcut.hidden = !dock.hidden;
   map.redraw();
-}).observe(playback);
+});
+dockLayout.observe(playback);
+dockLayout.observe(drivingDock);
 
 const speech = window.speechSynthesis;
 const mic = el('mic');
@@ -82,9 +99,8 @@ function readRoute() {
 function command(raw) {
   const text = raw.trim();
   if (!text) return;
-  if (/예시|샘플/.test(text)) {say('예시 주행을 시작합니다.');simulation.playExample();}
-  else if (/경로|안내|소요/.test(text)) readRoute();
-  else say('“경로 읽어 줘” 또는 “예시 주행 시작”이라고 말해 주세요.');
+  if (/경로|안내|소요/.test(text)) readRoute();
+  else say('“경로 읽어 줘”라고 말해 주세요.');
 }
 el('readRoute').onclick = readRoute;
 el('voiceForm').onsubmit = event=>{

@@ -41,7 +41,7 @@ function signalPhase(elapsed, offset) {
   return ((elapsed+offset)%signalCycle+signalCycle)%signalCycle;
 }
 
-export function createDrive(route) {
+export function createDrive(route, {testSignalStops = true} = {}) {
   const path = [];
   let distance = 0;
   for (const point of route?.points || []) {
@@ -57,7 +57,7 @@ export function createDrive(route) {
   const movingSeconds = Number.isFinite(route.durationSeconds) && route.durationSeconds>0
     ? route.durationSeconds : Math.max(1,Math.round(distance/(40/3.6)));
   let totalWait = 0;
-  const checkpoints = testSignals.map(({fraction,phaseAtFreeArrival},index) => {
+  const checkpoints = (testSignalStops ? testSignals : []).map(({fraction,phaseAtFreeArrival},index) => {
     const freeArrival = movingSeconds*fraction;
     const offset = phaseAtFreeArrival-freeArrival;
     const arrival = freeArrival+totalWait;
@@ -70,7 +70,7 @@ export function createDrive(route) {
     };
   });
   return {
-    name:route.name || '선택한 도로 경로',
+    name:route.tripLabel || route.name || '선택한 도로 경로',
     path,
     points:path.map(({lat,lng}) => ({lat,lng})),
     distanceMeters:Number.isFinite(route.distanceMeters) && route.distanceMeters>0 ? route.distanceMeters : distance,
@@ -142,12 +142,12 @@ export function initSimulation({map,openPanel}) {
   content.innerHTML = `
     <div class="simulation-actions">
       <button class="button primary" id="playExample" type="button">예시 경로 재생</button>
-      <button class="secondary" id="playRoadRoute" type="button" disabled>선택한 도로 경로 재생</button>
+      <button class="primary" id="playRoadRoute" type="button" disabled>선택한 도로 경로 재생</button>
     </div>
-    <p id="simulationRouteHint" class="status">경로 패널에서 도로 경로를 선택하면 이곳에서 재생할 수 있어요.</p>
-    <p class="muted">시험 교차로에서는 모의 신호에 따라 멈추고 출발합니다.</p>
+    <p id="simulationRouteHint" class="status">경로 탭에서 출발지와 도착지를 선택하고 경로를 조회해 주세요.</p>
+    <p class="muted">실제 신호는 재생 중에도 실제 신호 탭에서 조회할 수 있어요.</p>
     <div class="simulation-result" id="simulationResult" hidden>
-      <h3>교차로별 가상 대기</h3>
+      <h3 id="simulationResultTitle">재생 결과</h3>
       <ul id="simulationWaits"></ul>
       <p id="simulationOutcome" role="status"></p>
     </div>`;
@@ -159,8 +159,8 @@ export function initSimulation({map,openPanel}) {
         <p id="playbackState" role="status"></p>
       </div>
       <div class="playback-stats">
-        <span>경과 <strong id="playbackElapsed">0초</strong></span>
-        <span>대기 <strong id="playbackWait">0초</strong></span>
+        <span>가상 경과 <strong id="playbackElapsed">0초</strong></span>
+        <span id="playbackWaitStat" hidden>가상 대기 <strong id="playbackWait">0초</strong></span>
       </div>
     </div>
     <progress class="playback-progress" id="playbackProgress" aria-label="모의 주행 진행률" max="1" value="0"></progress>
@@ -168,6 +168,7 @@ export function initSimulation({map,openPanel}) {
       <div class="playback-controls">
         <button class="button primary" id="playbackToggle" type="button">일시정지</button>
         <button class="secondary" id="playbackRestart" type="button">처음부터</button>
+        <button class="secondary" id="playbackClose" type="button">재생 종료</button>
       </div>
       <div class="playback-speeds" aria-label="재생 배속" role="group">
         ${[1,2,4,8].map(rate => `<button class="secondary" type="button" data-rate="${rate}" aria-pressed="${rate===1}">${rate}×</button>`).join('')}
@@ -176,7 +177,7 @@ export function initSimulation({map,openPanel}) {
   dock.hidden = true;
 
   const element = id => document.getElementById(id);
-  const playRoadButton = element('playRoadRoute');
+  const roadButton = element('playRoadRoute');
   const stats = element('simulationResult');
   const waits = element('simulationWaits');
   const outcome = element('simulationOutcome');
@@ -189,10 +190,10 @@ export function initSimulation({map,openPanel}) {
   const restart = element('playbackRestart');
   const speedButtons = [...dock.querySelectorAll('[data-rate]')];
 
-  let selectedRoad = null;
   let drive = null;
   let clock = null;
-  let useExample = false;
+  let selectedRoad = null;
+  let offlineRun = false;
   let frame = 0;
   let speed = 1;
   let waitRows = [];
@@ -208,7 +209,7 @@ export function initSimulation({map,openPanel}) {
     if (arrived) clock.pause(now);
     map.setSimulation({
       points:drive.points, position:snapshot.position, stops:snapshot.stops,
-      useExample, progress:snapshot.progress
+      offline:offlineRun
     });
     progress.value = snapshot.progress;
     setText(elapsedLabel,formatTime(snapshot.elapsed));
@@ -226,7 +227,8 @@ export function initSimulation({map,openPanel}) {
           : wait.reached?formatTime(wait.seconds)+' 대기':'미도달'
       ));
     }
-    setText(outcome,arrived?`도착 · 총 ${formatTime(snapshot.elapsed)} · 대기 ${formatTime(snapshot.waitSeconds)}`:'');
+    setText(outcome,arrived ? '모의 도착 · 가상 '+formatTime(snapshot.elapsed)+
+      (offlineRun ? ' · 대기 '+formatTime(snapshot.waitSeconds) : '') : '');
   }
 
   function tick() {
@@ -235,19 +237,22 @@ export function initSimulation({map,openPanel}) {
     if (clock.playing) frame = requestAnimationFrame(tick);
   }
 
-  function start(nextDrive, example) {
+  function start(nextDrive, offline) {
     if (!nextDrive) return false;
     cancelAnimationFrame(frame);
     map.clearSimulation?.();
     drive = nextDrive;
-    useExample = example;
+    offlineRun = offline;
     clock = createPlaybackClock(drive.totalSeconds);
     const now = performance.now();
     clock.setRate(speed,now);
     clock.play(now);
     dock.hidden = false;
     stats.hidden = false;
-    routeLabel.textContent = drive.name+(example?' · 예시 경로':' · 도로 경로');
+    routeLabel.textContent = drive.name+(offline ? ' · 오프라인 예시' : ' · 카카오 도로 경로');
+    element('playbackWaitStat').hidden = !offline;
+    element('simulationResultTitle').textContent = offline ? '교차로별 가상 대기' : '재생 결과';
+    waits.hidden = !offline;
     waitRows = drive.checkpoints.map(() => document.createElement('li'));
     waits.replaceChildren(...waitRows);
     tick();
@@ -256,10 +261,20 @@ export function initSimulation({map,openPanel}) {
   }
 
   function playExample() {return start(createDrive(exampleRoute),true);}
-  function playRoadRoute() {return start(selectedRoad,false);}
+  function playRoadRoute() {return map.connected() && start(selectedRoad,false);}
+  function stop() {
+    if (!drive) return;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    drive = clock = null;
+    dock.hidden = true;
+    stats.hidden = true;
+    map.clearSimulation();
+  }
 
   element('playExample').onclick = playExample;
-  playRoadButton.onclick = playRoadRoute;
+  roadButton.onclick = playRoadRoute;
+  element('playbackClose').onclick = stop;
   toggle.onclick = () => {
     const now = performance.now();
     if (clock.playing) {
@@ -289,15 +304,17 @@ export function initSimulation({map,openPanel}) {
   }
 
   return {
-    setRoadRoute(route) {
-      selectedRoad = createDrive(route);
-      playRoadButton.disabled = !selectedRoad;
-      element('simulationRouteHint').textContent = selectedRoad
-        ? '선택한 도로 경로 · '+selectedRoad.name
-        : '경로 패널에서 도로 경로를 선택하면 이곳에서 재생할 수 있어요.';
-    },
     playExample,
     playRoadRoute,
-    redraw() {render(performance.now());}
+    stop,
+    stopOffline() {if (offlineRun) stop();},
+    setRoadRoute(route) {
+      if (drive && !offlineRun) stop();
+      selectedRoad = createDrive(route,{testSignalStops:false});
+      roadButton.disabled = !selectedRoad;
+      element('simulationRouteHint').textContent = selectedRoad
+        ? '선택한 경로 · '+selectedRoad.name
+        : '경로 탭에서 출발지와 도착지를 선택하고 경로를 조회해 주세요.';
+    }
   };
 }

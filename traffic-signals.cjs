@@ -129,7 +129,10 @@ async function handleTrafficSignals(url, json) {
     return json(400, {error:'지역과 교차로를 확인해 주세요.'});
   }
   const configuredKey = process.env.TRAFFIC_SIGNAL_SERVICE_KEY?.trim();
-  if (!configuredKey) return json(503, {error:'서버에 공공데이터포털 신호등 인증키가 설정되지 않았어요.'});
+  if (!configuredKey) return json(503, {
+    code:'SIGNAL_KEY_MISSING',
+    error:'신호등 조회를 사용하려면 서버에 TRAFFIC_SIGNAL_SERVICE_KEY를 등록하고 다시 실행해 주세요.'
+  });
   try {
     const key = configuredKey.includes('%') ? decodeURIComponent(configuredKey) : configuredKey;
     if (facilities) {

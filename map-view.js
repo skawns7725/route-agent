@@ -161,24 +161,32 @@ export function createMap(preview) {
   const live = document.getElementById('atlasMap');
   const credit = document.getElementById('mapCredit');
   const header = document.getElementById('tileState');
+  const placeholder = document.getElementById('mapPlaceholder');
+  const placeholderStatus = document.getElementById('mapPlaceholderStatus');
+  const retry = document.getElementById('retryMap');
+  const zoomControls = document.querySelector('.map-zoom');
   const switchButton = document.getElementById('mapSwitch');
   const workspace = document.getElementById('workspace');
   const offline = offlineMap(canvas,preview);
   const listeners = [];
-  let sdk, instance, liveMode = false, simulation, route, observation;
-  let routeLine, routeMarkers = [], observedMarker, simulationLine, vehicle, stopOverlays = [], paintedPoints;
+  let sdk, instance, liveMode = false, exampleMode = false, connecting = false, route, observation;
+  let routeLine, routeMarkers = [], observedMarker, gpsMarker, simulatedMarker;
+  let followingGps = false;
 
-  function chooseMode(showLive) {
-    liveMode = Boolean(showLive && instance);
+  function chooseMode(mode) {
+    liveMode = mode === 'live' && Boolean(instance);
+    exampleMode = mode === 'example';
     live.hidden = !liveMode;
-    canvas.hidden = liveMode;
-    credit.hidden = liveMode;
-    document.getElementById('mapMode').textContent = liveMode ? '카카오 지도' : '예시 지도';
-    switchButton.hidden = !instance;
-    switchButton.textContent = liveMode ? '예시 지도' : '카카오 지도';
+    canvas.hidden = !exampleMode;
+    credit.hidden = !exampleMode;
+    placeholder.hidden = liveMode || exampleMode;
+    zoomControls.hidden = !liveMode && !exampleMode;
+    document.getElementById('mapMode').textContent = exampleMode ? '오프라인 예시' : '카카오 지도';
+    switchButton.hidden = !exampleMode || !instance;
     workspace.classList.toggle('map-live',liveMode);
+    workspace.classList.toggle('map-ready',Boolean(instance));
     if (liveMode) instance.relayout();
-    else offline.redraw();
+    if (exampleMode) offline.redraw();
   }
   const latLng = point=>new sdk.LatLng(point.lat,point.lng);
   function line(points, options) {
@@ -196,57 +204,34 @@ export function createMap(preview) {
     observedMarker?.setMap(null);
     observedMarker = observation ? new sdk.Marker({map:instance,position:latLng(observation),title:observation.name || '실제 신호 위치'}) : null;
   }
-  function clearOverlays() {
-    simulationLine?.setMap(null);
-    vehicle?.setMap(null);
-    stopOverlays.forEach(({overlay})=>overlay.setMap(null));
-    stopOverlays = [];
-    simulationLine = vehicle = paintedPoints = null;
-  }
-  function drawSimulation() {
-    offline.setSnapshot(simulation?.useExample ? simulation : null);
-    if (!instance) return;
-    if (!simulation || simulation.useExample) {
-      if (paintedPoints) clearOverlays();
-      return;
-    }
-    if (paintedPoints !== simulation.points) {
-      clearOverlays();
-      paintedPoints = simulation.points;
-      simulationLine = line(simulation.points,{strokeColor:'#3e49a8',strokeStyle:'shortdash',strokeWeight:4});
-      const vehicleLabel = document.createElement('span');
-      vehicleLabel.className = 'map-vehicle';
-      vehicleLabel.textContent = '모의 차량';
-      vehicle = new sdk.CustomOverlay({map:instance,content:vehicleLabel,position:latLng(simulation.position),yAnchor:.5,zIndex:4});
-      stopOverlays = simulation.stops.map(stop=>{
-        const lamp = document.createElement('span');
-        lamp.className = 'map-test-signal';
-        const overlay = new sdk.CustomOverlay({map:instance,content:lamp,position:latLng(stop),yAnchor:.5,zIndex:3});
-        return {lamp,overlay};
-      });
-    }
-    vehicle.setPosition(latLng(simulation.position));
-    stopOverlays.forEach(({lamp},i)=>{
-      const stop = simulation.stops[i];
-      lamp.dataset.state = stop.state;
-      lamp.title = stop.label+' · 모의 '+(stop.state==='red'?'적색':'녹색');
-    });
-  }
   function zoom(delta) {
     if (liveMode) instance.setLevel(Math.max(1,Math.min(14,instance.getLevel()-delta)));
     else offline.zoom(delta);
   }
   document.getElementById('zoomIn').onclick = ()=>zoom(1);
   document.getElementById('zoomOut').onclick = ()=>zoom(-1);
-  switchButton.onclick = ()=>chooseMode(!liveMode);
-  chooseMode(false);
+  switchButton.onclick = ()=>chooseMode('live');
+  chooseMode('pending');
+
+  function setConnectionStatus(message, retryable = false) {
+    header.textContent = message;
+    placeholderStatus.textContent = message;
+    retry.hidden = !retryable;
+  }
 
   async function connect() {
+    if (connecting || instance) return;
+    connecting = true;
+    setConnectionStatus('지도 연결 확인 중');
     try {
       const reply = await fetch('/api/map-config',{signal:AbortSignal.timeout(5000)});
       if (!reply.ok) throw Error('지도 설정을 확인하지 못했어요.');
       const {javascriptKey} = await reply.json();
-      if (!javascriptKey) {header.textContent = '카카오 지도 연결 설정 필요'; return;}
+      if (!javascriptKey) {
+        setConnectionStatus('서버에 카카오 지도 키를 설정해 주세요.',true);
+        workspace.classList.add('map-unavailable');
+        return;
+      }
       const script = document.createElement('script');
       const url = 'https://dapi.kakao.com/v2/maps/sdk.js?autoload=false&libraries=services&appkey='+encodeURIComponent(javascriptKey);
       await new Promise((resolve,reject)=>{
@@ -260,17 +245,22 @@ export function createMap(preview) {
         document.head.append(script);
       });
       sdk = window.kakao.maps;
-      instance = new sdk.Map(live,{center:new sdk.LatLng(36.350,127.389),level:8});
-      chooseMode(!simulation?.useExample);
-      header.textContent = '카카오 지도 연결됨';
+      instance = new sdk.Map(live,{center:new sdk.LatLng(37.564,126.978),level:8});
+      sdk.event.addListener(instance,'dragstart',()=>{followingGps=false;});
+      chooseMode('live');
+      workspace.classList.remove('map-unavailable');
+      setConnectionStatus('카카오 지도 연결됨');
       redrawRoute();
       redrawObservation();
-      drawSimulation();
       for (const listener of listeners.splice(0)) listener({sdk,instance});
     } catch {
-      header.textContent = '카카오 지도 연결을 확인해 주세요.';
+      setConnectionStatus('카카오 지도 연결을 확인해 주세요.',true);
+      workspace.classList.add('map-unavailable');
+    } finally {
+      connecting = false;
     }
   }
+  retry.onclick = connect;
   return {
     connect,
     connected:()=>Boolean(instance),
@@ -280,27 +270,62 @@ export function createMap(preview) {
     setObservedPoint(value){observation=value;redrawObservation();},
     focusPoint(point) {
       if (!instance) return;
-      chooseMode(true);
+      followingGps = false;
+      chooseMode('live');
       instance.setLevel(4);
       instance.panTo(latLng(point));
     },
     focusRoute(points) {
       if (!instance || !points.length) return;
-      chooseMode(true);
+      followingGps = false;
+      chooseMode('live');
       const bounds = new sdk.LatLngBounds();
       points.forEach(point=>bounds.extend(latLng(point)));
       const compact = innerWidth <= 720;
       instance.setBounds(bounds,105,65,compact?Math.round(innerHeight*.36):70,compact?35:440);
     },
-    setSimulation(value) {
-      const changed = simulation?.points !== value.points || simulation?.useExample !== value.useExample;
-      simulation = value;
-      if (changed) {
-        chooseMode(!value.useExample);
-        if (!value.useExample) this.focusRoute(value.points);
+    setLivePosition(point, {follow = false} = {}) {
+      if (!instance || !point) {
+        gpsMarker?.setMap(null);
+        gpsMarker = null;
+        return;
       }
-      drawSimulation();
+      const position = latLng(point);
+      if (!gpsMarker) {
+        const dot = document.createElement('span');
+        dot.className = 'map-live-position';
+        dot.setAttribute('role','img');
+        dot.setAttribute('aria-label','현재 GPS 위치');
+        gpsMarker = new sdk.CustomOverlay({map:instance,content:dot,position,yAnchor:.5,zIndex:5});
+      } else gpsMarker.setPosition(position);
+      if (follow) {
+        followingGps = true;
+        chooseMode('live');
+        instance.setLevel(4);
+      }
+      if (followingGps) instance.panTo(position);
     },
-    clearSimulation(){simulation=null;drawSimulation();}
+    setSimulation(value) {
+      if (value.offline) {
+        if (!instance && !exampleMode) chooseMode('example');
+        offline.setSnapshot(value);
+        return;
+      }
+      if (!instance) return;
+      const position = latLng(value.position);
+      if (!simulatedMarker) {
+        this.focusRoute(value.points);
+        const marker = document.createElement('span');
+        marker.className = 'map-simulated-vehicle';
+        marker.textContent = '모의 차량';
+        simulatedMarker = new sdk.CustomOverlay({map:instance,content:marker,position,yAnchor:.5,zIndex:5});
+      } else simulatedMarker.setPosition(position);
+    },
+    clearSimulation(){
+      simulatedMarker?.setMap(null);
+      simulatedMarker = null;
+      offline.setSnapshot(null);
+      if (exampleMode) chooseMode(instance ? 'live' : 'pending');
+    }
   };
 }

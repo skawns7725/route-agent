@@ -29,10 +29,11 @@ function routeFare(toll) {
   return '통행료 '+toll.toLocaleString('ko-KR')+'원';
 }
 
-export function initRouting({map,setRoadRoute,openPanel}) {
+export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPanel}) {
   const root = document.getElementById('routeContent');
   root.innerHTML = `
     <div class="route-toolbar inline-actions">
+      <button class="secondary" id="routeSeoul" type="button" disabled>서울시청 → 서울역 검색</button>
       <button class="secondary" id="routeGps" type="button">현 위치에서 출발</button>
       <button class="secondary" id="routeSwap" type="button">출발·도착 바꾸기</button>
     </div>
@@ -50,7 +51,10 @@ export function initRouting({map,setRoadRoute,openPanel}) {
       <summary>도로 구간</summary>
       <ol class="route-steps" id="routeSteps"></ol>
     </details>
-    <button class="secondary" id="routeSimulation" type="button" hidden>이 경로로 모의 주행</button>
+    <div class="inline-actions">
+      <button class="primary" id="routeSimulation" type="button" hidden>이 경로로 모의 주행</button>
+      <button class="secondary" id="routeDrive" type="button" hidden>GPS 주행 시작</button>
+    </div>
   `;
   const find = id => document.getElementById(id);
   const status = find('routeStatus');
@@ -59,7 +63,8 @@ export function initRouting({map,setRoadRoute,openPanel}) {
   const details = find('routeDetails');
   const steps = find('routeSteps');
   const source = find('routeSource');
-  const simulation = find('routeSimulation');
+  const drive = find('routeDrive');
+  const simulate = find('routeSimulation');
   const gpsButton = find('routeGps');
   const viaButton = find('routeVia');
   const slots = {};
@@ -80,7 +85,8 @@ export function initRouting({map,setRoadRoute,openPanel}) {
     options.replaceChildren();
     steps.replaceChildren();
     details.hidden = true;
-    simulation.hidden = true;
+    drive.hidden = true;
+    simulate.hidden = true;
     source.hidden = true;
     map.setRoute({points:[],markers:tripMarkers()});
     setRoadRoute(null);
@@ -252,7 +258,8 @@ export function initRouting({map,setRoadRoute,openPanel}) {
       return;
     }
     const name = labels[kind];
-    selectedRoute = {name,points,durationSeconds:route.summary.duration,distanceMeters:route.summary.distance};
+    const tripLabel = slots.start.place.name+' → '+slots.end.place.name;
+    selectedRoute = {name,tripLabel,points,durationSeconds:route.summary.duration,distanceMeters:route.summary.distance};
     setRoadRoute(selectedRoute);
     map.setRoute({points,markers:tripMarkers()});
     map.focusRoute(points);
@@ -270,7 +277,8 @@ export function initRouting({map,setRoadRoute,openPanel}) {
     }
     details.hidden = !steps.childElementCount;
     details.open = false;
-    simulation.hidden = false;
+    drive.hidden = false;
+    simulate.hidden = false;
   }
 
   function showOptions(data) {
@@ -352,12 +360,30 @@ export function initRouting({map,setRoadRoute,openPanel}) {
     }
   });
   gpsButton.addEventListener('click',focusGps);
-  simulation.addEventListener('click',() => openPanel('simulation'));
+  drive.addEventListener('click',startDrive);
+  simulate.addEventListener('click',startSimulation);
+  const seoul = find('routeSeoul');
+  seoul.addEventListener('click',()=>{
+    for (const [id,query] of [['start','서울시청'],['via',''],['end','서울역 경부선']]) {
+      const slot = slots[id];
+      cancelLookup(slot);
+      slot.place = null;
+      slot.input.value = query;
+    }
+    slots.via.row.hidden = true;
+    viaButton.setAttribute('aria-expanded','false');
+    viaButton.textContent = '경유지 추가';
+    clearResults();
+    status.textContent = '서울 출발지와 도착지의 검색 결과를 선택해 주세요.';
+    searchPlace(slots.start);
+    searchPlace(slots.end);
+  });
   map.onReady(({sdk:maps}) => {
     sdk = maps;
     places = new sdk.services.Places();
     geocoder = new sdk.services.Geocoder();
     compare.disabled = false;
+    seoul.disabled = false;
     if (!gpsPending) status.textContent = '장소를 검색하거나 현재 위치를 출발지로 지정해 주세요.';
     for (const slot of Object.values(slots)) if (slot.input.value && !slot.place) searchPlace(slot);
   });

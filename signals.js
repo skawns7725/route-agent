@@ -5,7 +5,7 @@ const signalStatus=el('signalStatus'), signalRows=el('signalRows'), refreshSigna
 const showSignalMap=el('showSignalMap'), signalDistrict=el('signalDistrict'), facilityFilter=el('facilityFilter');
 const isDaejeon=()=>signalRegion.value==='3000000000';
 for(const [code,name] of [
- ['30','대전'],['11','서울'],['26','부산'],['27','대구'],['28','인천'],['29','광주'],['31','울산'],
+ ['11','서울'],['30','대전'],['26','부산'],['27','대구'],['28','인천'],['29','광주'],['31','울산'],
  ['36','세종'],['41','경기'],['51','강원'],['43','충북'],['44','충남'],['52','전북'],['46','전남'],
  ['47','경북'],['48','경남'],['50','제주']
 ]) signalRegion.add(new Option(name,code+'00000000'));
@@ -83,7 +83,7 @@ async function loadSignalIntersections(){
   data.intersections.sort((a,b)=>Number(b.hasSignals)-Number(a.hasSignals)||a.name.localeCompare(b.name,'ko'));
   for(const crossing of data.intersections){
    signalIntersections.set(crossing.id,crossing);
-   signalCrossing.add(new Option(crossing.name+(crossing.hasSignals?' · 신호 정보 있음':''),crossing.id));
+   signalCrossing.add(new Option(crossing.name+(crossing.hasSignals?' · 신호 응답 있음':''),crossing.id));
   }
   signalCrossing.disabled=!signalIntersections.size;
   signalStatus.textContent=signalIntersections.size?'교차로를 선택하면 신호 정보를 조회합니다.':'이 지역에서 제공되는 교차로 정보가 없어요. 다른 지역을 선택해 주세요.';

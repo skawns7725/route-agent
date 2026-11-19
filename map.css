@@ -40,9 +40,40 @@ button { text-align: center; }
 .map-layer[hidden] { display: block !important; visibility: hidden; pointer-events: none; }
 #exampleMap { background: #e9ede6; touch-action: none; cursor: grab; }
 #exampleMap:active { cursor: grabbing; }
-.map-vehicle { display: block; padding: 5px 8px; border: 2px solid white; border-radius: 8px; color: white; background: #394abc; font-size: 11px; font-weight: 800; box-shadow: 0 2px 7px #0d184f75; white-space: nowrap; }
-.map-test-signal { display: block; width: 16px; height: 16px; border: 2px solid white; border-radius: 50%; background: #247657; box-shadow: 0 1px 4px #263a33a0; transform: translate(-10px,-14px); }
-.map-test-signal[data-state="red"] { background: #b52d34; }
+.map-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 85px 20px 90px;
+  background: #e6ede8;
+  text-align: center;
+}
+.map-placeholder > div { padding: 20px; }
+.map-placeholder strong { font-size: 19px; }
+.map-placeholder p { margin: 6px 0 13px; color: var(--muted); font-size: 13px; }
+.map-live-position {
+  display: block;
+  width: 19px;
+  height: 19px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: #206dd0;
+  box-shadow: 0 0 0 6px #206dd035, 0 1px 5px #16407064;
+}
+.map-simulated-vehicle {
+  display: block;
+  padding: 4px 8px;
+  border: 2px solid #fff;
+  border-radius: 18px;
+  background: #4946a6;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 1px 5px #20205470;
+}
+.map-ready #playExample { display: none; }
 .rail {
   position: absolute;
   z-index: 4;
@@ -263,7 +294,10 @@ button { text-align: center; }
 .playback-stats { color: #445c56; font-size: 12px; }
 .playback-progress { width: 100%; height: 6px; accent-color: var(--green); }
 .status-chip { display: inline-flex; padding: 4px 7px; border-radius: 6px; background: #f8e8ca; color: #774a13; font-size: 11px; font-weight: 800; }
+.live-drive .status-chip { background: #deeeff; color: #155082; }
 .sample-shortcut { position: absolute; right: 20px; bottom: 25px; z-index: 2; background: #173e35; color: #fff; border-color: #173e35; }
+.sample-shortcut:not([hidden]) { display: none; }
+.map-unavailable .sample-shortcut:not([hidden]) { display: block; }
 .sample-shortcut:hover { color: #19332c; }
 @media (min-width: 721px) and (max-width: 940px) {
   #workspace.rail-expanded { --rail-width: 142px; }
@@ -300,7 +334,7 @@ button { text-align: center; }
   .playback, .panel-open .playback { width: auto; left: 6px; right: 6px; bottom: calc(var(--bottom-bar) + 4px); padding: 8px 10px; }
   .playback-controls, .playback-speeds { margin: 3px 0; gap: 4px; }
   .sample-shortcut { bottom: calc(var(--bottom-bar) + 22px); right: 9px; }
-  .panel-open .sample-shortcut { display: none; }
+  .panel-open.map-unavailable .sample-shortcut:not([hidden]) { display: none; }
 }
 @media (max-width: 390px) {
   #tileState { max-width: 130px; }
