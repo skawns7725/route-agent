@@ -364,7 +364,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   simulate.addEventListener('click',startSimulation);
   const seoul = find('routeSeoul');
   seoul.addEventListener('click',()=>{
-    for (const [id,query] of [['start','서울시청'],['via',''],['end','서울역 경부선']]) {
+    for (const [id,query] of [['start','서울시청'],['via',''],['end','서울역']]) {
       const slot = slots[id];
       cancelLookup(slot);
       slot.place = null;

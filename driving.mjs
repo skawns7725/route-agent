@@ -25,6 +25,15 @@ export function prepareRouteGeometry(points) {
   return {segments, length, end:points.at(-1)};
 }
 
+export function projectOnSegment(point, segment) {
+  const local = localMeters(point, segment.start);
+  const fraction = Math.max(0, Math.min(1, (local.x * segment.x + local.y * segment.y) / segment.size ** 2));
+  return {
+    separation:Math.hypot(local.x - fraction * segment.x, local.y - fraction * segment.y),
+    meters:segment.offset + fraction * segment.size
+  };
+}
+
 export function readRoutePosition(geometry, point, accuracy, distanceMeters) {
   if (!geometry?.segments.length || !Number.isFinite(accuracy) || accuracy < 0 || accuracy > maximumAccuracy) {
     return {state:'inaccurate', remaining:null};
@@ -32,12 +41,10 @@ export function readRoutePosition(geometry, point, accuracy, distanceMeters) {
   let nearest = Infinity;
   let metersAlong = 0;
   for (const segment of geometry.segments) {
-    const local = localMeters(point,segment.start);
-    const fraction = Math.max(0,Math.min(1,(local.x * segment.x + local.y * segment.y) / segment.size ** 2));
-    const separation = Math.hypot(local.x - fraction * segment.x,local.y - fraction * segment.y);
+    const {separation, meters} = projectOnSegment(point, segment);
     if (separation < nearest) {
       nearest = separation;
-      metersAlong = segment.offset + fraction * segment.size;
+      metersAlong = meters;
     }
   }
   if (nearest > Math.max(50,accuracy * 1.5)) return {state:'off-route', remaining:null};
@@ -48,7 +55,8 @@ export function readRoutePosition(geometry, point, accuracy, distanceMeters) {
     return {state:'arrived', remaining:0};
   }
   const total = Number.isFinite(distanceMeters) && distanceMeters > 0 ? distanceMeters : geometry.length;
-  return {state:'on-route', remaining:total * geometricRemaining / geometry.length};
+  return {state:'on-route', remaining:total * geometricRemaining / geometry.length, metersAlong,
+    signalPositionReliable:nearest <= 24 && accuracy <= 40};
 }
 
 function distanceText(meters) {
@@ -58,7 +66,7 @@ function distanceText(meters) {
     : Math.round(meters) + 'm';
 }
 
-export function initDriving({map, openPanel}) {
+export function initDriving({map, openPanel, nextSignal}) {
   const content = document.getElementById('drivingContent');
   const dock = document.getElementById('drivingDock');
   content.innerHTML = `
@@ -105,6 +113,7 @@ export function initDriving({map, openPanel}) {
   }
 
   function discardPosition() {
+    nextSignal.update('gps', null);
     clearTimeout(expiry);
     point = null;
     recenter.disabled = true;
@@ -112,6 +121,7 @@ export function initDriving({map, openPanel}) {
   }
 
   function finish(text, arrived = false) {
+    nextSignal.stop('gps');
     session++;
     watching = false;
     if (watchId !== undefined) navigator.geolocation.clearWatch(watchId);
@@ -151,6 +161,7 @@ export function initDriving({map, openPanel}) {
       return;
     }
     readings({remaining:result.remaining,speed:result.state === 'inaccurate' ? null : speed,accuracy});
+    nextSignal.update('gps', result.signalPositionReliable ? result.metersAlong : null);
     clearTimeout(expiry);
     if (result.state === 'inaccurate') {
       discardPosition();
@@ -187,6 +198,7 @@ export function initDriving({map, openPanel}) {
     readings();
     status('GPS 위치를 확인하고 있어요.');
     openPanel('driving',{playing:true});
+    nextSignal.start('gps', geometry, dock);
 
     try {
       const id = navigator.geolocation.watchPosition(position=>{

@@ -82,6 +82,15 @@
       </section>
     </aside>
 
+    <aside id="nextSignal" class="next-signal" aria-label="다음 교차로 신호" hidden>
+      <div class="next-signal-heading">
+        <span class="next-signal-icon" aria-hidden="true">🚦</span>
+        <div><span>전방 교차로 · 실제 신호</span><strong></strong><span data-approach></span></div>
+        <b data-distance></b>
+      </div>
+      <ul hidden></ul>
+      <p role="status"></p>
+    </aside>
     <section id="playback" class="playback" aria-label="모의 주행 재생" hidden></section>
     <section id="drivingDock" class="playback live-drive" aria-label="실제 GPS 주행 상태" hidden></section>
     <button id="sampleShortcut" class="sample-shortcut" type="button" hidden><span aria-hidden="true">▶</span> 오프라인 예시</button>

@@ -136,7 +136,7 @@ function formatTime(seconds) {
   return minutes ? minutes+'분 '+rounded%60+'초' : rounded+'초';
 }
 
-export function initSimulation({map,openPanel}) {
+export function initSimulation({map,openPanel,nextSignal}) {
   const content = document.getElementById('simulationContent');
   const dock = document.getElementById('playback');
   content.innerHTML = `
@@ -145,7 +145,7 @@ export function initSimulation({map,openPanel}) {
       <button class="primary" id="playRoadRoute" type="button" disabled>선택한 도로 경로 재생</button>
     </div>
     <p id="simulationRouteHint" class="status">경로 탭에서 출발지와 도착지를 선택하고 경로를 조회해 주세요.</p>
-    <p class="muted">실제 신호는 재생 중에도 실제 신호 탭에서 조회할 수 있어요.</p>
+    <p class="muted">카카오 도로 재생 중에는 다음 교차로의 실제 신호를 지도에 함께 표시해요.</p>
     <div class="simulation-result" id="simulationResult" hidden>
       <h3 id="simulationResultTitle">재생 결과</h3>
       <ul id="simulationWaits"></ul>
@@ -194,6 +194,7 @@ export function initSimulation({map,openPanel}) {
   let clock = null;
   let selectedRoad = null;
   let offlineRun = false;
+  let signalRouteLength = 0;
   let frame = 0;
   let speed = 1;
   let waitRows = [];
@@ -207,6 +208,10 @@ export function initSimulation({map,openPanel}) {
     const snapshot = sampleDrive(drive,clock.reading(now));
     const arrived = snapshot.stage==='arrived';
     if (arrived) clock.pause(now);
+    if (!offlineRun) {
+      if (arrived) nextSignal.stop('simulation');
+      else nextSignal.update('simulation',snapshot.progress * signalRouteLength);
+    }
     map.setSimulation({
       points:drive.points, position:snapshot.position, stops:snapshot.stops,
       offline:offlineRun
@@ -243,6 +248,7 @@ export function initSimulation({map,openPanel}) {
     map.clearSimulation?.();
     drive = nextDrive;
     offlineRun = offline;
+    if (offline) nextSignal.stop('simulation');
     clock = createPlaybackClock(drive.totalSeconds);
     const now = performance.now();
     clock.setRate(speed,now);
@@ -255,8 +261,11 @@ export function initSimulation({map,openPanel}) {
     waits.hidden = !offline;
     waitRows = drive.checkpoints.map(() => document.createElement('li'));
     waits.replaceChildren(...waitRows);
-    tick();
     openPanel?.('simulation',{playing:true});
+    if (!offline) {
+      signalRouteLength = nextSignal.start('simulation', drive, dock);
+    }
+    tick();
     return true;
   }
 
@@ -266,6 +275,7 @@ export function initSimulation({map,openPanel}) {
     if (!drive) return;
     cancelAnimationFrame(frame);
     frame = 0;
+    nextSignal.stop('simulation');
     drive = clock = null;
     dock.hidden = true;
     stats.hidden = true;
@@ -289,9 +299,11 @@ export function initSimulation({map,openPanel}) {
   };
   restart.onclick = () => {
     const now = performance.now();
-    const resume = clock.playing || clock.reading(now)>=drive.totalSeconds;
+    const arrived = clock.reading(now)>=drive.totalSeconds;
+    const resume = clock.playing || arrived;
     cancelAnimationFrame(frame);
     clock.reset();
+    if (arrived && !offlineRun) signalRouteLength = nextSignal.start('simulation', drive, dock);
     if (resume) clock.play(now);
     tick();
   };

@@ -3,6 +3,7 @@ import {initRouting} from './routing.js';
 import {initSignals} from './signals.js';
 import {exampleRoute, initSimulation} from './simulation.js';
 import {initDriving} from './driving.mjs';
+import {initNextSignal} from './next-signal.mjs';
 
 const el = id=>document.getElementById(id);
 const workspace = el('workspace');
@@ -43,8 +44,9 @@ function openPanel(name, {playing = false} = {}) {
   setPanel(name);
 }
 const closePanel = ()=>setPanel(null);
-const simulation = initSimulation({map,openPanel});
-const driving = initDriving({map,openPanel});
+const nextSignal = initNextSignal({map,card:el('nextSignal')});
+const simulation = initSimulation({map,openPanel,nextSignal});
+const driving = initDriving({map,openPanel,nextSignal});
 const routing = initRouting({
   map,openPanel,startDrive:driving.start,startSimulation:simulation.playRoadRoute,
   setRoadRoute(route) {

@@ -170,7 +170,7 @@ export function createMap(preview) {
   const offline = offlineMap(canvas,preview);
   const listeners = [];
   let sdk, instance, liveMode = false, exampleMode = false, connecting = false, route, observation;
-  let routeLine, routeMarkers = [], observedMarker, gpsMarker, simulatedMarker;
+  let routeLine, routeMarkers = [], observedMarker, gpsMarker, simulatedMarker, nextSignalMarker;
   let followingGps = false;
 
   function chooseMode(mode) {
@@ -268,6 +268,17 @@ export function createMap(preview) {
     redraw:offline.redraw,
     setRoute(value){route=value;redrawRoute();},
     setObservedPoint(value){observation=value;redrawObservation();},
+    setNextSignal(crossing) {
+      nextSignalMarker?.setMap(null);
+      nextSignalMarker = null;
+      if (!instance || !crossing) return;
+      const icon = document.createElement('span');
+      icon.className = 'map-next-signal';
+      icon.setAttribute('role','img');
+      icon.setAttribute('aria-label','다음 교차로: '+crossing.name);
+      icon.textContent = '🚦';
+      nextSignalMarker = new sdk.CustomOverlay({map:instance,content:icon,position:latLng(crossing),yAnchor:.5,zIndex:4});
+    },
     focusPoint(point) {
       if (!instance) return;
       followingGps = false;
