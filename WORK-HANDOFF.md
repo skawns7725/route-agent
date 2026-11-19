@@ -3,7 +3,7 @@ Last-Author: Codex
 ## 2026-11-19 작업 인수인계
 
 - `route-agent-demo.html`에서 전국 지도를 초기 화면으로 열고, 장소명·주소 검색과 지도 클릭, 현재 위치, 출발·경유·도착 지정 기능을 추가했다. 대화형 안내는 아직 모의 데이터다.
-- `serve.cjs`의 `/api/map-config`는 `KAKAO_MAP_JAVASCRIPT_KEY` 값으로 브라우저 지도 SDK를 자동 연결한다. 설정 전에는 기존 수동 연결을 사용할 수 있다. `KAKAO_MOBILITY_REST_KEY`는 자동차 길찾기 요청에만 사용한다.
+- `serve.cjs`의 `/api/map-config`로 받은 `KAKAO_MAP_JAVASCRIPT_KEY`로 페이지가 지도 SDK를 자동 로딩한다. 수동 키 입력 UI를 제거했고, 키 누락과 설정 응답 실패를 화면에 표시한다. `KAKAO_MOBILITY_REST_KEY`는 자동차 길찾기 요청에만 사용한다.
 - `AGENTS.md`에 교차 인수인계 규칙을 추가했고 `CLAUDE.md`에서 이를 불러온다.
 - 브라우저 스크립트 문법과 로컬 HTTP 응답을 확인했다. 테스트 키로 지도 설정 응답에 브라우저용 키만 반환되는 것을 검증했다.
-- 다음 작업은 Codespaces에 JavaScript 키를 설정하고 기존 미리보기 도메인에서 지도 타일, 전국 장소 검색, 실제 경로선과 통행료 표시를 확인하는 것이다. 로컬에서 볼 때는 사용하는 로컬 주소도 Kakao 콘솔에 등록해야 한다.
+- 자동 로딩, 키 누락, 설정 응답 실패를 모의 브라우저 환경에서 확인했다. 사용자가 Codespaces 시크릿 적용을 보고했다. 비공개 Codespace를 최신 `main`으로 갱신하고, 지도 타일과 장소 검색 및 실제 경로 표시를 확인해야 한다.
