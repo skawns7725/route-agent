@@ -1,4 +1,5 @@
 const center = {lat:36.348,lng:127.397};
+const routeColor = '#2563eb';
 const river = [[127.32,36.403],[127.342,36.393],[127.367,36.392],[127.387,36.402],[127.409,36.393],[127.431,36.373],[127.433,36.361],[127.418,36.346],[127.420,36.334],[127.435,36.311],[127.462,36.299]];
 const arterialRoads = [
   [[127.309,36.350],[127.338,36.351],[127.361,36.351],[127.384,36.356],[127.416,36.357],[127.453,36.355],[127.484,36.354]],
@@ -29,11 +30,12 @@ function offlineMap(canvas, preview) {
   let width = 0, height = 0, zoom = 1, panX = 0, panY = 0, frame = 0, snapshot = null, drag;
   const workspace = document.getElementById('workspace');
   function point(lng, lat) {
-    const compact = width <= 720;
+    const compact = matchMedia('(width < 768px)').matches;
+    const tablet = matchMedia('(768px <= width < 1024px)').matches;
     const panel = workspace.classList.contains('panel-open');
     const scale = Math.min(width / (compact ? .137 : .173),height / .113) * zoom;
     return [
-      width * (compact ? .50 : panel ? .61 : .53) + (lng-center.lng)*scale*.82 + panX,
+      width * (tablet && panel ? .71 : .5) + (lng-center.lng)*scale*.82 + panX,
       height * (compact ? panel ? .29 : .43 : .50) - (lat-center.lat)*scale + panY
     ];
   }
@@ -127,7 +129,7 @@ function offlineMap(canvas, preview) {
     if (!route.length) return;
     const geometry = route.map(p=>[p.lng,p.lat]);
     stroke(geometry,'#fff',8);
-    stroke(geometry,snapshot?'#43866b':'#64947d',snapshot?5:3.5,snapshot?[]:[5,6]);
+    stroke(geometry,routeColor,snapshot?5:3.5,snapshot?[]:[5,6]);
     pin(route[0],'#294d43','용운동',5);
     pin(route.at(-1),'#247b68','충남대',5);
     if (!snapshot) return;
@@ -171,7 +173,12 @@ export function createMap(preview) {
   const listeners = [];
   let sdk, instance, liveMode = false, exampleMode = false, connecting = false, route, observation;
   let routeLine, routeMarkers = [], observedMarker, gpsMarker, simulatedMarker, nextSignalMarker;
+  let placeMarkers = [];
   let followingGps = false;
+
+  new ResizeObserver(() => {
+    if (liveMode) instance.relayout();
+  }).observe(live);
 
   function chooseMode(mode) {
     liveMode = mode === 'live' && Boolean(instance);
@@ -197,7 +204,7 @@ export function createMap(preview) {
     routeLine?.setMap(null);
     routeMarkers.forEach(marker=>marker.setMap(null));
     routeMarkers = (route?.markers || []).map(marker=>new sdk.Marker({map:instance,position:latLng(marker),title:marker.label}));
-    routeLine = route?.points.length > 1 ? line(route.points,{strokeColor:'#147a66',strokeWeight:5}) : null;
+    routeLine = route?.points.length > 1 ? line(route.points,{strokeColor:routeColor,strokeWeight:6}) : null;
   }
   function redrawObservation() {
     if (!instance) return;
@@ -268,6 +275,31 @@ export function createMap(preview) {
     redraw:offline.redraw,
     setRoute(value){route=value;redrawRoute();},
     setObservedPoint(value){observation=value;redrawObservation();},
+    showPlaceMarkers(places,onSelect) {
+      for (const {overlay} of placeMarkers) overlay.setMap(null);
+      placeMarkers = [];
+      if (!instance) return;
+      placeMarkers = places.map((place,index)=>{
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'map-place-marker';
+        button.textContent = String(index+1);
+        button.setAttribute('aria-label',place.name+' 지도 마커');
+        button.setAttribute('aria-pressed','false');
+        button.onclick = ()=>onSelect(index);
+        const overlay = new sdk.CustomOverlay({
+          map:instance,content:button,position:latLng(place),yAnchor:1,zIndex:6,clickable:true
+        });
+        return {button,overlay};
+      });
+    },
+    selectPlaceMarker(index) {
+      placeMarkers.forEach(({button,overlay},position)=>{
+        const selected = index === position;
+        button.setAttribute('aria-pressed',String(selected));
+        overlay.setZIndex(selected ? 7 : 6);
+      });
+    },
     setNextSignal(crossing) {
       nextSignalMarker?.setMap(null);
       nextSignalMarker = null;
@@ -292,8 +324,20 @@ export function createMap(preview) {
       chooseMode('live');
       const bounds = new sdk.LatLngBounds();
       points.forEach(point=>bounds.extend(latLng(point)));
-      const compact = innerWidth <= 720;
-      instance.setBounds(bounds,105,65,compact?Math.round(innerHeight*.36):70,compact?35:440);
+      const viewport = live.getBoundingClientRect();
+      const panel = document.getElementById('toolPanel').getBoundingClientRect();
+      const compact = matchMedia('(width < 768px)').matches;
+      const panelOverlap = panel.width && panel.right > viewport.left;
+      const left = 32 + (!compact && panelOverlap ? panel.right - viewport.left : 0);
+      let bottom = 32;
+      const bottomOverlays = compact
+        ? ['toolPanel','routeSummary','playback','drivingDock']
+        : ['routeSummary','playback','drivingDock'];
+      for (const id of bottomOverlays) {
+        const overlay = document.getElementById(id).getBoundingClientRect();
+        if (overlay.height) bottom = Math.max(bottom,viewport.bottom - overlay.top + 16);
+      }
+      instance.setBounds(bounds,80,64,Math.min(bottom,viewport.height * .72),Math.min(left,viewport.width * .68));
     },
     setLivePosition(point, {follow = false} = {}) {
       if (!instance || !point) {

@@ -1,3 +1,5 @@
+import {createPlaceLookup} from './place-search.mjs';
+
 const labels = {
   fast:'빠른 길',
   short:'짧은 길',
@@ -68,8 +70,23 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   const simulate = find('routeSimulation');
   const gpsButton = find('routeGps');
   const viaButton = find('routeVia');
+  const summaryCard = find('routeSummary');
+  summaryCard.innerHTML = `
+    <div class="route-summary-copy">
+      <strong id="routeSummaryTrip"></strong>
+      <div class="route-summary-metrics" id="routeSummaryMetrics"></div>
+    </div>
+    <div class="route-summary-actions">
+      <button class="secondary" id="routeSummaryDetails" type="button" aria-controls="routeDetails">경로 상세</button>
+      <button class="primary" id="routeSummaryDrive" type="button">GPS 주행 시작</button>
+    </div>
+  `;
+  const summaryTrip = find('routeSummaryTrip');
+  const summaryMetrics = find('routeSummaryMetrics');
+  const summaryDetails = find('routeSummaryDetails');
+  const summaryDrive = find('routeSummaryDrive');
   const slots = {};
-  let places, geocoder, sdk, controller, selectedRoute = null;
+  let lookup, sdk, controller, selectedRoute = null;
   let gpsPending = false;
 
   function tripMarkers() {
@@ -89,6 +106,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     drive.hidden = true;
     simulate.hidden = true;
     source.hidden = true;
+    summaryCard.hidden = true;
     map.setRoute({points:[],markers:tripMarkers()});
     setRoadRoute(null);
   }
@@ -110,48 +128,39 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     if (focusMap) map.focusPoint(place);
   }
 
-  function showPlaceResults(slot, data, resultStatus, version) {
-    if (version !== slot.version) return;
+  function showPlaceResults(slot, places) {
     slot.results.replaceChildren();
-    if (resultStatus !== sdk.services.Status.OK || !data.length) {
-      slot.results.textContent = resultStatus === sdk.services.Status.ERROR
-        ? '장소를 가져오지 못했어요. 다시 검색해 주세요.' : '검색 결과가 없어요.';
+    if (!places.length) {
+      slot.results.textContent = '검색 결과가 없어요.';
       return;
     }
-    for (const item of data.slice(0,5)) {
-      const lat = Number(item.y), lng = Number(item.x);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-      const address = item.road_address_name || item.address_name;
-      const name = item.place_name || address;
-      if (!name) continue;
+    for (const place of places.slice(0,5)) {
+      const {name,address} = place;
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'route-place-option';
       button.textContent = address && name !== address ? name+' · '+address : name;
       button.addEventListener('click',() => {
-        choosePlace(slot,{lat,lng,name});
+        choosePlace(slot,place);
         slot.input.focus();
       });
       slot.results.append(button);
     }
   }
 
-  function searchPlace(slot) {
+  async function searchPlace(slot) {
     cancelLookup(slot);
     if (!sdk) return;
     const keyword = slot.input.value.trim();
     if (keyword.length < 2) return;
     const version = slot.version;
     slot.results.textContent = '장소 검색 중…';
-    places.keywordSearch(keyword,(data,resultStatus) => {
-      if (version !== slot.version) return;
-      if (resultStatus !== sdk.services.Status.ZERO_RESULT) {
-        showPlaceResults(slot,data,resultStatus,version);
-        return;
-      }
-      geocoder.addressSearch(keyword,(addresses,addressStatus) =>
-        showPlaceResults(slot,addresses,addressStatus,version));
-    });
+    try {
+      const places = await lookup(keyword);
+      if (version === slot.version) showPlaceResults(slot,places);
+    } catch {
+      if (version === slot.version) slot.results.textContent = '장소를 가져오지 못했어요. 다시 검색해 주세요.';
+    }
   }
 
   for (const [id,label] of Object.entries(slotLabels)) {
@@ -189,6 +198,27 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
       if (event.key === 'Enter' && !slot.place) {
         event.preventDefault();
         searchPlace(slot);
+      }
+      if (event.key === 'Escape' && results.hasChildNodes()) {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelLookup(slot);
+      }
+    });
+    results.addEventListener('keydown',event => {
+      const buttons = [...results.querySelectorAll('button')];
+      const current = buttons.indexOf(event.target);
+      if (current < 0) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelLookup(slot);
+        input.focus();
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const next = current + (event.key === 'ArrowDown' ? 1 : -1);
+        if (next < 0) input.focus();
+        else buttons[next]?.focus();
       }
     });
   }
@@ -263,7 +293,6 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     selectedRoute = {name,tripLabel,points,durationSeconds:route.summary.duration,distanceMeters:route.summary.distance};
     setRoadRoute(selectedRoute);
     map.setRoute({points,markers:tripMarkers()});
-    map.focusRoute(points);
     for (const [button,current] of buttons) button.setAttribute('aria-pressed',String(current === option));
     steps.replaceChildren();
     for (const section of route.sections) {
@@ -280,6 +309,14 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     details.open = false;
     drive.hidden = false;
     simulate.hidden = false;
+    summaryTrip.textContent = tripLabel;
+    const duration = document.createElement('strong');
+    duration.className = 'route-summary-duration';
+    duration.textContent = formatDuration(route.summary.duration);
+    summaryMetrics.replaceChildren(duration, ' · '+[formatDistance(route.summary.distance), routeFare(route.summary.fare?.toll), name].join(' · '));
+    summaryDetails.hidden = details.hidden;
+    summaryCard.hidden = false;
+    map.focusRoute(points);
   }
 
   function showOptions(data) {
@@ -362,6 +399,12 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   });
   gpsButton.addEventListener('click',focusGps);
   drive.addEventListener('click',startDrive);
+  summaryDrive.addEventListener('click',startDrive);
+  summaryDetails.addEventListener('click',() => {
+    openPanel('route');
+    details.open = true;
+    details.querySelector('summary').focus();
+  });
   simulate.addEventListener('click',startSimulation);
   const seoul = find('routeSeoul');
   const ulsan = find('routeUlsan');
@@ -384,8 +427,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   ulsan.onclick = ()=>searchTrip('태화로터리','울산시청');
   map.onReady(({sdk:maps}) => {
     sdk = maps;
-    places = new sdk.services.Places();
-    geocoder = new sdk.services.Geocoder();
+    lookup = createPlaceLookup(sdk);
     compare.disabled = false;
     seoul.disabled = false;
     ulsan.disabled = false;
@@ -394,6 +436,12 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   });
   return {
     focusGps,
+    chooseMapPlace(slot,place) {
+      openPanel('route');
+      choosePlace(slots[slot],place,false);
+      const other = slots[slot === 'start' ? 'end' : 'start'];
+      (other.place ? compare : other.input).focus({preventScroll:true});
+    },
     routeSummary:() => selectedRoute
       ? selectedRoute.name+', '+formatDistance(selectedRoute.distanceMeters)+', '+formatDuration(selectedRoute.durationSeconds)+' 예상이에요.'
       : null

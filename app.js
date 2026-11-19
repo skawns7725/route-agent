@@ -4,6 +4,7 @@ import {initSignals} from './signals.js';
 import {exampleRoute, initSimulation} from './simulation.js';
 import {initDriving} from './driving.mjs';
 import {initNextSignal} from './next-signal.mjs';
+import {initPlaceSearch} from './place-search.mjs';
 
 const el = id=>document.getElementById(id);
 const workspace = el('workspace');
@@ -15,12 +16,15 @@ const sampleShortcut = el('sampleShortcut');
 const buttons = [...document.querySelectorAll('[data-panel]')];
 const views = [...panel.querySelectorAll('[data-view]')];
 const map = createMap(exampleRoute.points);
+const compact = matchMedia('(width < 768px)');
+const scrollPositions = new Map();
 let activePanel = null;
 let microphone = null;
 
 function setPanel(name, focus = true) {
   if (activePanel === name) return;
   const oldPanel = activePanel;
+  if (oldPanel) scrollPositions.set(oldPanel, panel.scrollTop);
   activePanel = name;
   panel.hidden = name === null;
   workspace.classList.toggle('panel-open',Boolean(name));
@@ -29,14 +33,14 @@ function setPanel(name, focus = true) {
   if (oldPanel === 'voice' && name !== 'voice') microphone?.abort();
   if (name === 'signals') loadSignals();
   if (focus && name) panel.querySelector('[data-view]:not([hidden]) h1')?.focus({preventScroll:true});
-  else if (focus) buttons.find(button=>button.dataset.panel===oldPanel)?.focus();
-  panel.scrollTop = 0;
+  else if (focus) (buttons.find(button => button.dataset.panel === oldPanel) || buttons[0]).focus();
+  panel.scrollTop = scrollPositions.get(name) ?? 0;
   map.redraw();
 }
 function openPanel(name, {playing = false} = {}) {
   if (playing && name === 'driving') simulation.stop();
   if (playing && name === 'simulation' && !drivingDock.hidden) driving.stop();
-  if (playing && matchMedia('(max-width: 720px)').matches) {
+  if (playing && compact.matches) {
     setPanel(null,false);
     el(name === 'driving' ? 'driveStop' : 'playbackToggle').focus({preventScroll:true});
     return;
@@ -54,6 +58,11 @@ const routing = initRouting({
     simulation.setRoadRoute(route);
   }
 });
+initPlaceSearch({
+  map,
+  chooseRoutePlace:routing.chooseMapPlace,
+  onSearch() {if (compact.matches) setPanel(null,false);}
+});
 const loadSignals = initSignals({map,closePanel});
 map.onReady(()=>{
   simulation.stopOffline();
@@ -61,7 +70,7 @@ map.onReady(()=>{
 
 for (const button of buttons) {
   button.setAttribute('aria-label',button.title);
-  button.onclick = ()=>setPanel(activePanel === button.dataset.panel ? null : button.dataset.panel);
+  button.onclick = ()=>setPanel(button.dataset.panel);
 }
 railToggle.onclick = ()=>{
   const expanded = workspace.classList.toggle('rail-expanded');
@@ -139,5 +148,5 @@ mic.onclick = ()=>{
   }
 };
 
-if (matchMedia('(min-width: 721px)').matches) setPanel('route',false);
+if (!compact.matches) setPanel('route',false);
 map.connect();
