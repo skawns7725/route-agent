@@ -1,6 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const {handleTrafficSignals} = require('./traffic-signals.cjs');
 
 const provider = 'https://apis-navi.kakaomobility.com/v1/directions';
 function validPoint(value) {
@@ -17,6 +18,12 @@ async function handler(req, res) {
   if (req.method !== 'GET') return json(res, 405, {error:'지원하지 않는 요청입니다.'});
   if (url.pathname === '/api/map-config') {
     return json(res, 200, {javascriptKey:process.env.KAKAO_MAP_JAVASCRIPT_KEY?.trim() || ''});
+  }
+  if (['/api/intersections','/api/traffic-signals','/api/traffic-light-facilities'].includes(url.pathname)) {
+    if (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin') {
+      return json(res, 403, {error:'앱 화면에서 다시 조회해 주세요.'});
+    }
+    return handleTrafficSignals(url, (status, payload) => json(res, status, payload));
   }
   if (url.pathname === '/api/routes') {
     if (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin') {

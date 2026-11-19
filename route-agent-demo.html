@@ -1,5 +1,194 @@
 <!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>가는 길에 · 경로 안내 데모</title><style>*{box-sizing:border-box}body{margin:0;background:#eff2ec;color:#142d26;font:16px/1.65 system-ui,sans-serif}main{max-width:720px;margin:auto;padding:28px 18px}h1{font-size:36px;margin:0}section{background:white;border-radius:18px;padding:20px;margin:14px 0}button,input{font:inherit;padding:9px 13px;border:1px solid #b6c7bf;border-radius:12px;background:white;margin:3px;color:inherit}button{cursor:pointer}#mic,form button{background:#144d3e;color:white}form{display:flex}input{min-width:0;flex:1}small{color:#4d655c}#reply{font-size:19px;min-height:64px}#status{font-weight:bold}.atlas{padding:14px}.atlas header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.atlas select{padding:5px}.atlas details{padding:9px 0}.atlas summary{cursor:pointer}#atlasMap{height:clamp(260px,44vh,470px);border-radius:12px;background:#dce5e0}#flowKey{width:150px}#tripPlaces{display:grid;gap:.6rem}#tripPlaces label{display:grid;gap:.2rem}#tripPlaces input{width:100%;margin:0}#tripPlaces button{display:block;text-align:left;width:100%;margin:4px 0}#tripResults{display:flex;gap:6px;flex-wrap:wrap}#tripResults button[aria-pressed="true"]{border-color:#164ad2;background:#e9efff}#tripDetails{margin:.6rem 0}#tripDetails ol{max-height:230px;overflow:auto;padding-left:2rem}@media(min-width:840px){main{max-width:1100px}.atlas{display:grid;grid-template-columns:minmax(270px,1fr) minmax(350px,1.7fr);gap:8px 16px}.atlas header{grid-column:1/-1}#atlasMap,#backupMap{grid-column:2;grid-row:2/span 6;align-self:start}#tripFields,#tripResults,#tripDetails,#roadResult{grid-column:1}#roadRoute{justify-self:start}}@media(max-width:580px){#atlasMap{max-height:44vh}#tripResults button{flex:1 1 100%;text-align:left}}</style><main><small>대전 · 모의 주행</small><h1>가는 길에</h1><section class="atlas"><header><b>대전 도로지도</b> <label>지도 스타일 <select id="theme"><option value="ROADMAP">일반</option><option value="HYBRID">스카이뷰</option></select></label></header><figure id="backupMap" style="margin:0"><svg viewBox="0 -90 600 525" role="img" aria-label="대전 5개 구 행정경계와 용운동, 충남대 위치" style="width:100%;height:280px;background:#eff4ef;border-radius:12px"><path fill="#c0d9cd" stroke="#81998f" d="M419,36L377,84L369,120L388,153L319,180L319,180L306,170L306,170L296,133L296,133L317,119L327,62L291,21L306,-2L306,-2L350,-3L372,7L406,-5L436,9L419,36Z"><title>대덕구</title></path><path fill="#d1e2ce" stroke="#81998f" d="M306,-2L291,21L327,62L317,119L296,133L296,133L277,133L237,170L222,199L225,227L182,296L162,309L162,309L107,278L120,257L120,207L120,207L144,171L150,65L150,65L165,53L208,53L242,11L249,-49L278,-73L297,-60L297,-60L308,-46L306,-2Z"><title>유성구</title></path><path fill="#e2dfc5" stroke="#81998f" d="M296,133L306,170L306,170L285,218L267,296L267,296L254,301L257,380L214,438L214,438L193,378L163,365L144,341L144,341L162,309L162,309L182,296L225,227L222,199L237,170L277,133L296,133Z"><title>서구</title></path><path fill="#c7dedc" stroke="#81998f" d="M306,170L319,180L319,180L375,250L343,267L353,302L342,320L358,350L332,399L332,399L314,392L285,330L289,308L267,296L267,296L285,218L306,170Z"><title>중구</title></path><path fill="#d6dbc9" stroke="#81998f" d="M453,53L488,55L503,97L503,97L465,110L468,138L434,197L429,272L415,317L423,351L423,351L391,375L392,389L359,423L332,399L332,399L358,350L342,320L353,302L343,267L375,250L319,180L319,180L388,153L369,120L377,84L419,36L419,36L436,76L453,53Z"><title>동구</title></path><circle cx="227" cy="144" r="7" fill="#124534"/><text x="217" y="149" text-anchor="end" font-size="20" font-weight="bold">충남대</text><circle cx="379" cy="199" r="7" fill="#124534"/><text x="389" y="204" text-anchor="start" font-size="20" font-weight="bold">용운동</text></svg><figcaption><small>대전 위치도 · 통계청 2013 시군구 경계 · <a href="https://github.com/southkorea/southkorea-maps">원자료</a> · <span id="via">직행</span></small></figcaption></figure><a href="https://map.kakao.com/link/map/충남대,36.363,127.344" target="_blank" rel="noopener">카카오맵에서 열기 ↗</a> <fieldset id="tripFields" disabled><legend>자동차 길찾기</legend><div id="tripPlaces"></div><button id="tripVia" type="button" aria-expanded="false">경유지 추가</button><label><input id="avoidTolls" type="checkbox"> 유료도로 피하기</label><button id="tripSwap" type="button">출발·도착 바꾸기</button></fieldset><div id="tripResults" aria-label="경로 후보"></div><details id="tripDetails" hidden><summary>경로 상세</summary><ol id="tripSteps"></ol></details><button id="roadRoute">실제 도로 경로 조회</button><p id="roadResult" aria-live="polite"></p><div id="atlasMap" style="height:0"></div><small id="tileState">내장 위치도 · 상세 도로지도 연결 중…</small><label><input id="flow" type="checkbox" disabled> 교통상황</label></section><section><b>모의 경로 · 용운동 → 충남대</b><p id="routes"></p><strong id="status"></strong></section><section><small>음성 안내</small><p id="reply" aria-live="polite">“충남대 가자”라고 말해 주세요.</p><button id="mic">음성 시작</button><span id="feedback"></span><form><input aria-label="요청" placeholder="거기 리뷰는? 아까 얘기한 곳 중 싼 곳은?"><button>보내기</button></form><div id="examples"></div></section><button id="traffic">모의 정체 전환</button><button id="pass">추천 매장 진입로 통과</button><p><small>시간·교차로·리뷰·가격·주차 정보는 데모용 예시입니다.</small></p></main><script>
 const el=id=>document.getElementById(id);
+const signalPanel=document.createElement('section');
+signalPanel.setAttribute('aria-labelledby','signalTitle');
+signalPanel.innerHTML=`
+ <h2 id="signalTitle" style="font-size:20px;margin:0 0 8px">신호등 정보</h2>
+ <details>
+  <summary style="cursor:pointer">지역과 신호등 선택</summary>
+  <div style="display:grid;gap:8px;margin:10px 0">
+   <label>지역 <select id="signalRegion"></select></label>
+   <label id="signalDistrictRow">자치구 <select id="signalDistrict">
+    <option>유성구</option><option>대덕구</option><option>동구</option><option>서구</option><option>중구</option>
+   </select></label>
+   <label id="facilityFilterRow">검색 <input id="facilityFilter" placeholder="주소, 도로명, 관리번호" style="max-width:100%;margin:0"></label>
+   <div>
+    <label><span id="signalCrossingLabel">신호등</span> <select id="signalCrossing" disabled style="max-width:100%"></select></label>
+    <button id="showSignalMap" type="button" hidden>지도에서 보기</button>
+    <button id="refreshSignal" type="button" disabled>다시 조회</button>
+   </div>
+  </div>
+  <p id="signalStatus" role="status"></p>
+  <div id="signalRows"></div>
+  <small><span id="signalSourceNote"></span>
+   <a id="signalSource" target="_blank" rel="noopener noreferrer">공공데이터포털</a>
+  </small>
+ </details>`;
+document.querySelector('.atlas').after(signalPanel);
+const signalRegion=el('signalRegion'), signalCrossing=el('signalCrossing');
+const signalStatus=el('signalStatus'), signalRows=el('signalRows'), refreshSignal=el('refreshSignal');
+const showSignalMap=el('showSignalMap'), signalDistrict=el('signalDistrict'), facilityFilter=el('facilityFilter');
+const isDaejeon=()=>signalRegion.value==='3000000000';
+for(const [code,name] of [
+ ['30','대전'],['11','서울'],['26','부산'],['27','대구'],['28','인천'],['29','광주'],['31','울산'],
+ ['36','세종'],['41','경기'],['51','강원'],['43','충북'],['44','충남'],['52','전북'],['46','전남'],
+ ['47','경북'],['48','경남'],['50','제주']
+]) signalRegion.add(new Option(name,code+'00000000'));
+
+let signalIntersections=new Map(), signalRequest=0, signalExpiry, signalMarker, signalMap, signalMaps;
+async function requestSignal(path, params){
+ const response=await fetch(path+'?'+new URLSearchParams(params),{signal:AbortSignal.timeout(12000)});
+ const data=await response.json();
+ if(!response.ok)throw Error(data.error);
+ return data;
+}
+function resetSignalDetails(){
+ clearTimeout(signalExpiry);
+ signalRows.replaceChildren();
+}
+function populateFacilityOptions(){
+ const previous=signalCrossing.value;
+ const keyword=facilityFilter.value.trim().replace(/\s/g,'').toLowerCase();
+ const matches=[...signalIntersections.values()].filter(facility=>
+  [facility.name,facility.road,facility.managementId].some(value=>value.replace(/\s/g,'').toLowerCase().includes(keyword)));
+ signalCrossing.replaceChildren(new Option('신호등 선택',''));
+ for(const facility of matches.slice(0,100)){
+  signalCrossing.add(new Option(facility.name+' · '+(facility.type||'유형 미제공')+' · '+facility.managementId,facility.id));
+ }
+ signalCrossing.disabled=!matches.length;
+ signalCrossing.value=matches.slice(0,100).some(facility=>facility.id===previous)?previous:'';
+ if(previous&&!signalCrossing.value){
+  resetSignalDetails();
+  updateSignalMarker();
+ }
+ signalStatus.textContent=!matches.length?'검색 조건에 맞는 신호등이 없어요.'
+  :matches.length>100?`신호등 ${matches.length.toLocaleString('ko-KR')}건 중 100건 표시 · 주소나 관리번호로 좁혀 보세요.`
+  :`신호등 ${matches.length.toLocaleString('ko-KR')}건`;
+}
+function updateSignalMarker(){
+ signalMarker?.setMap(null);
+ const crossing=signalIntersections.get(signalCrossing.value);
+ showSignalMap.hidden=!signalMap||!crossing;
+ if(showSignalMap.hidden)return;
+ const position=new signalMaps.LatLng(crossing.lat,crossing.lng);
+ signalMarker=new signalMaps.Marker({map:signalMap,position,title:crossing.name});
+}
+showSignalMap.onclick=()=>{
+ signalMap.setLevel(4);
+ signalMap.panTo(signalMarker.getPosition());
+ el('atlasMap').scrollIntoView({block:'center'});
+};
+async function loadSignalIntersections(){
+ const token=++signalRequest;
+ const local=isDaejeon();
+ el('signalDistrictRow').hidden=!local;
+ el('facilityFilterRow').hidden=!local;
+ el('signalCrossingLabel').textContent=local?'신호등':'교차로';
+ el('signalSource').href='https://www.data.go.kr/data/'+(local?'15110706':'15157604')+'/openapi.do';
+ el('signalSourceNote').textContent=local?'대전광역시 설치 현황 · 실시간 잔여시간 미제공':'신호 정보는 제공 시점의 참고값입니다. 실제 신호를 따르세요.';
+ resetSignalDetails();
+ signalIntersections.clear();
+ signalCrossing.replaceChildren(new Option(local?'신호등 선택':'교차로 선택',''));
+ signalCrossing.disabled=true;
+ facilityFilter.disabled=true;
+ refreshSignal.disabled=true;
+ updateSignalMarker();
+ signalStatus.textContent=local?'신호등 목록을 불러오는 중…':'교차로 목록을 불러오는 중…';
+ try{
+  if(local){
+   const data=await requestSignal('/api/traffic-light-facilities',{district:signalDistrict.value});
+   if(token!==signalRequest)return;
+   data.facilities.sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+   for(const facility of data.facilities)signalIntersections.set(facility.id,facility);
+   facilityFilter.disabled=false;
+   populateFacilityOptions();
+   return;
+  }
+  const data=await requestSignal('/api/intersections',{region:signalRegion.value});
+  if(token!==signalRequest)return;
+  data.intersections.sort((a,b)=>Number(b.hasSignals)-Number(a.hasSignals)||a.name.localeCompare(b.name,'ko'));
+  for(const crossing of data.intersections){
+   signalIntersections.set(crossing.id,crossing);
+   signalCrossing.add(new Option(crossing.name+(crossing.hasSignals?' · 신호 정보 있음':''),crossing.id));
+  }
+  signalCrossing.disabled=!signalIntersections.size;
+  signalStatus.textContent=signalIntersections.size?'교차로를 선택하면 신호 정보를 조회합니다.':'이 지역에서 제공되는 교차로 정보가 없어요. 다른 지역을 선택해 주세요.';
+ }catch(error){
+  if(token===signalRequest)signalStatus.textContent=error.message||'교차로 목록을 가져오지 못했어요.';
+ }finally{
+  if(token===signalRequest)refreshSignal.disabled=false;
+ }
+}
+async function loadSignalDetails(){
+ const token=++signalRequest;
+ const id=signalCrossing.value;
+ resetSignalDetails();
+ updateSignalMarker();
+ if(!id){
+  refreshSignal.disabled=false;
+  if(isDaejeon())populateFacilityOptions();
+  else signalStatus.textContent='교차로를 선택해 주세요.';
+  return;
+ }
+ if(isDaejeon()){
+  const facility=signalIntersections.get(id);
+  const record=document.createElement('p');
+  record.textContent=[
+   facility.name,
+   facility.road,
+   facility.type,
+   facility.lenses,
+   '관리번호 '+facility.managementId,
+   facility.referenceDate&&'자료 기준 '+facility.referenceDate
+  ].filter(Boolean).join(' · ');
+  signalRows.append(record);
+  return;
+ }
+ refreshSignal.disabled=true;
+ signalStatus.textContent='신호 정보를 조회하는 중…';
+ try{
+  const data=await requestSignal('/api/traffic-signals',{region:signalRegion.value,id});
+  if(token!==signalRequest)return;
+  if(!data.signals.length){
+   signalStatus.textContent='이 교차로의 신호 상태를 받지 못했어요.';
+   return;
+  }
+  const observed=Date.parse(data.observedAt);
+  const observedLabel=Number.isFinite(observed)
+   ?'집계 '+new Date(observed).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'})
+   :'집계 시각 미제공';
+  const remainingMs=observed+15000-Date.now();
+  const current=Boolean(data.fresh&&remainingMs>0);
+  const render=fresh=>{
+   signalStatus.textContent=observedLabel+(fresh?' · 조회 시점 잔여시간':' · 최근 신호를 다시 조회해 주세요.');
+   const list=document.createElement('ul');
+   list.style.cssText='max-height:220px;overflow:auto;padding-left:22px';
+   for(const signal of data.signals){
+    const item=document.createElement('li');
+    item.textContent=signal.direction+' '+signal.movement+' · '+signal.state;
+    if(fresh&&signal.seconds!==null)item.textContent+=' · '+signal.seconds+'초';
+    list.append(item);
+   }
+   signalRows.replaceChildren(list);
+  };
+  render(current);
+  if(current)signalExpiry=setTimeout(()=>render(false),remainingMs);
+ }catch(error){
+  if(token===signalRequest)signalStatus.textContent=error.message||'신호 정보를 가져오지 못했어요.';
+ }finally{
+  if(token===signalRequest)refreshSignal.disabled=false;
+ }
+}
+signalPanel.querySelector('details').addEventListener('toggle',event=>{
+ if(event.currentTarget.open&&!signalRequest)loadSignalIntersections();
+});
+signalRegion.onchange=signalDistrict.onchange=()=>{
+ facilityFilter.value='';
+ loadSignalIntersections();
+};
+facilityFilter.oninput=populateFacilityOptions;
+signalCrossing.onchange=loadSignalDetails;
+refreshSignal.onclick=()=>!isDaejeon()&&signalCrossing.value?loadSignalDetails():loadSignalIntersections();
 const shops={맥도날드:[8,'유턴이 필요하고 드라이브스루가 있어요.','가격과 리뷰는 미확인이에요.'],버거집A:[3,'오른쪽으로 진입하고 주차장이 있어요.','세트 8천 원대, 방문자 리뷰 320개, 별점 4.3점(5점 만점)이에요.'],편의점:[2,'같은 방향으로 복귀하고 주차장이 있어요.','5천 원 이내 식사 조합이 있어요. 리뷰는 미확인이에요.']};
 const discussed=new Set(); let focus='',food='';
 const details={맥도날드:{price:9000,review:'감자튀김이 따뜻하다는 평이 있어요. 세트는 9천 원이고 드라이브스루가 있어요. 주차장 크기는 미확인이에요.'},버거집A:{price:8000,review:'주차장이 넓고 차를 대기 편하다는 평이 많아요. 세트는 8천 원, 방문자 리뷰 320개에 별점은 4.3/5예요.'},편의점:{price:4500,review:'가격이 저렴하다는 평이 있어요. 주먹밥·음료 조합은 4,500원이고 주차장은 좁은 편이에요.'}};
@@ -84,6 +273,7 @@ function loadMap(key){
  try{
  const k=kakao.maps,canvas=el('atlasMap');canvas.style.height='350px';
  const map=new k.Map(canvas,{center:new k.LatLng(36.4,127.8),level:13});
+ signalMap=map;signalMaps=k;updateSignalMarker();
  map.addControl(new k.ZoomControl(),k.ControlPosition.RIGHT);
  const theme=el('theme');theme.onchange=()=>map.setMapTypeId(k.MapTypeId[theme.value]);theme.onchange();
  const flow=el('flow');flow.disabled=false;flow.onchange=()=>flow.checked?map.addOverlayMapTypeId(k.MapTypeId.TRAFFIC):map.removeOverlayMapTypeId(k.MapTypeId.TRAFFIC);
