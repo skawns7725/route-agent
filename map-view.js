@@ -1,5 +1,14 @@
 const center = {lat:36.348,lng:127.397};
 const routeColor = '#2563eb';
+const vehicleAnchor = 2 / 3;
+const zoomSpeeds = [30, 60, 90];
+
+function courseBetween(from, to, minimumMeters) {
+  const north = (to.lat - from.lat) * 111195;
+  const east = (to.lng - from.lng) * 111195 * Math.cos(from.lat * Math.PI / 180);
+  if (Math.hypot(east,north) < minimumMeters) return null;
+  return Math.atan2(east,north) * 180 / Math.PI;
+}
 const river = [[127.32,36.403],[127.342,36.393],[127.367,36.392],[127.387,36.402],[127.409,36.393],[127.431,36.373],[127.433,36.361],[127.418,36.346],[127.420,36.334],[127.435,36.311],[127.462,36.299]];
 const arterialRoads = [
   [[127.309,36.350],[127.338,36.351],[127.361,36.351],[127.384,36.356],[127.416,36.357],[127.453,36.355],[127.484,36.354]],
@@ -27,9 +36,15 @@ const labels = [
 
 function offlineMap(canvas, preview) {
   const ctx = canvas.getContext('2d');
-  let width = 0, height = 0, zoom = 1, panX = 0, panY = 0, frame = 0, snapshot = null, drag;
+  let width = 0, height = 0, zoom = 1, panX = 0, panY = 0, frame = 0, snapshot = null, drag, camera;
   const workspace = document.getElementById('workspace');
   function point(lng, lat) {
+    if (camera) {
+      const scale = Math.min(width/.137,height/.113) * 2 ** (5-camera.level);
+      const x = (lng-camera.point.lng)*scale*.82;
+      const y = (camera.point.lat-lat)*scale;
+      return [width/2+x*camera.cos-y*camera.sin,height*vehicleAnchor+x*camera.sin+y*camera.cos];
+    }
     const compact = matchMedia('(width < 768px)').matches;
     const tablet = matchMedia('(768px <= width < 1024px)').matches;
     const panel = workspace.classList.contains('panel-open');
@@ -134,7 +149,7 @@ function offlineMap(canvas, preview) {
     pin(route.at(-1),'#247b68','충남대',5);
     if (!snapshot) return;
     for (const stop of snapshot.stops) pin(stop,stop.state==='red'?'#b52d34':'#237a58','',5,-12);
-    if (snapshot.position) pin(snapshot.position,'#334fd0','모의 차량',8);
+    if (snapshot.position && !camera) pin(snapshot.position,'#334fd0','모의 차량',8);
   }
   function redraw() {
     if (!frame) frame = requestAnimationFrame(render);
@@ -155,7 +170,11 @@ function offlineMap(canvas, preview) {
   });
   for (const name of ['pointerup','pointercancel','lostpointercapture']) canvas.addEventListener(name,()=>{drag=null;});
   new ResizeObserver(redraw).observe(canvas);
-  return {redraw,zoom:scrollZoom,setSnapshot(value){snapshot=value;redraw();}};
+  return {
+    redraw,zoom:scrollZoom,
+    setSnapshot(value){snapshot=value;redraw();},
+    setCamera(value){camera=value;redraw();}
+  };
 }
 
 export function createMap(preview) {
@@ -177,9 +196,15 @@ export function createMap(preview) {
   let placeMarkers = [];
   let followingGps = false;
   let trafficEnabled = false;
+  let navigationOwner = null, navigationPoint, bearingPoint, heading, exploreCamera;
+  let navigationSpeed = null, navigationLevel = 3;
+  let vehicle;
 
   new ResizeObserver(() => {
-    if (liveMode) instance.relayout();
+    if (liveMode) {
+      instance.relayout();
+      if (navigationPoint) instance.setCenter(latLng(navigationPoint));
+    }
   }).observe(live);
 
   function chooseMode(mode) {
@@ -212,7 +237,77 @@ export function createMap(preview) {
   function redrawObservation() {
     if (!instance) return;
     observedMarker?.setMap(null);
-    observedMarker = observation ? new sdk.Marker({map:instance,position:latLng(observation),title:observation.name || '실제 신호 위치'}) : null;
+    observedMarker = observation && !navigationOwner
+      ? new sdk.Marker({map:instance,position:latLng(observation),title:observation.name || '실제 신호 위치'}) : null;
+  }
+  function aimCamera(point, {points, gpsHeading, accuracy = 0} = {}) {
+    if (heading == null && points?.length > 1) {
+      for (let index = 1; index < points.length; index++) {
+        heading = courseBetween(points[0],points[index],1);
+        if (heading !== null) break;
+      }
+    }
+    if (Number.isFinite(gpsHeading) && gpsHeading >= 0 && gpsHeading < 360 && navigationSpeed >= 2 && accuracy <= 40) {
+      heading = gpsHeading;
+      bearingPoint = point;
+    } else if (!bearingPoint) bearingPoint = point;
+    else if (navigationSpeed !== 0 && accuracy <= 40) {
+      const course = courseBetween(bearingPoint,point,Math.max(.8,accuracy));
+      if (course !== null) {
+        heading = course;
+        bearingPoint = point;
+      }
+    }
+    // Keep the current zoom just beyond each speed threshold to avoid GPS jitter.
+    const kmh = Number.isFinite(navigationSpeed) ? navigationSpeed * 3.6 : 0;
+    while (navigationLevel < 6 && kmh >= zoomSpeeds[navigationLevel-3] + 3) navigationLevel++;
+    while (navigationLevel > 3 && kmh < zoomSpeeds[navigationLevel-4] - 3) navigationLevel--;
+    navigationPoint = point;
+    vehicle.hidden = false;
+    const angle = heading ?? 0;
+    workspace.style.setProperty('--navigation-heading',angle+'deg');
+    if (exampleMode) {
+      const radians = -angle * Math.PI/180;
+      offline.setCamera({point,level:navigationLevel,cos:Math.cos(radians),sin:Math.sin(radians)});
+    } else if (liveMode) {
+      if (instance.getLevel() !== navigationLevel) instance.setLevel(navigationLevel);
+      instance.setCenter(latLng(point));
+    }
+  }
+  function setNavigationMode(owner) {
+    if (owner === navigationOwner) return;
+    if (!vehicle) {
+      vehicle = document.createElement('span');
+      vehicle.className = 'navigation-vehicle';
+      vehicle.setAttribute('role','img');
+      vehicle.setAttribute('aria-label','주행 위치');
+      workspace.append(vehicle);
+    }
+    if (!navigationOwner && instance) exploreCamera = {center:instance.getCenter(),level:instance.getLevel()};
+    navigationOwner = owner;
+    navigationPoint = bearingPoint = heading = null;
+    navigationSpeed = null;
+    navigationLevel = 3;
+    followingGps = false;
+    vehicle.hidden = true;
+    workspace.classList.toggle('navigation-map',Boolean(owner));
+    workspace.style.removeProperty('--navigation-heading');
+    offline.setCamera(null);
+    if (!instance) return;
+    instance.relayout();
+    instance.setDraggable(!owner);
+    instance.setZoomable(!owner);
+    redrawObservation();
+    for (const {overlay} of placeMarkers) overlay.setMap(owner ? null : instance);
+    if (!owner && exploreCamera) {
+      instance.setLevel(exploreCamera.level);
+      instance.setCenter(exploreCamera.center);
+      exploreCamera = null;
+    } else if (owner === 'gps' && route?.points.length) {
+      aimCamera(route.points[0],{points:route.points});
+      vehicle.hidden = true;
+      bearingPoint = null;
+    }
   }
   function zoom(delta) {
     if (liveMode) instance.setLevel(Math.max(1,Math.min(14,instance.getLevel()-delta)));
@@ -264,8 +359,11 @@ export function createMap(preview) {
       });
       sdk = window.kakao.maps;
       instance = new sdk.Map(live,{center:new sdk.LatLng(37.564,126.978),level:8});
+      // Anchor the SDK's own logo and copyright together inside the rotated viewport.
+      const logo = live.querySelector?.('img[alt^="Kakao"][src*="/mapjsapi/images/"]');
+      logo?.closest('a')?.parentElement?.parentElement?.classList.add('map-sdk-credit');
       sdk.event.addListener(instance,'dragstart',()=>{followingGps=false;});
-      chooseMode('live');
+      chooseMode(exampleMode ? 'example' : 'live');
       workspace.classList.remove('map-unavailable');
       setConnectionStatus('카카오 지도 연결됨');
       redrawRoute();
@@ -284,6 +382,8 @@ export function createMap(preview) {
     connected:()=>Boolean(instance),
     onReady(listener){if (instance) listener({sdk,instance}); else listeners.push(listener);},
     redraw:offline.redraw,
+    setNavigationMode,
+    setNavigationSpeed(speed){navigationSpeed=speed;},
     setRoute(value){route=value;redrawRoute();},
     setObservedPoint(value){observation=value;redrawObservation();},
     showPlaceMarkers(places,onSelect) {
@@ -299,7 +399,7 @@ export function createMap(preview) {
         button.setAttribute('aria-pressed','false');
         button.onclick = ()=>onSelect(index);
         const overlay = new sdk.CustomOverlay({
-          map:instance,content:button,position:latLng(place),yAnchor:1,zIndex:6,clickable:true
+          map:navigationOwner ? null : instance,content:button,position:latLng(place),yAnchor:1,zIndex:6,clickable:true
         });
         return {button,overlay};
       });
@@ -323,14 +423,14 @@ export function createMap(preview) {
       nextSignalMarker = new sdk.CustomOverlay({map:instance,content:icon,position:latLng(crossing),yAnchor:.5,zIndex:4});
     },
     focusPoint(point) {
-      if (!instance) return;
+      if (!instance || navigationOwner) return;
       followingGps = false;
       chooseMode('live');
       instance.setLevel(4);
       instance.panTo(latLng(point));
     },
     focusRoute(points) {
-      if (!instance || !points.length) return;
+      if (!instance || navigationOwner || !points.length) return;
       followingGps = false;
       chooseMode('live');
       const bounds = new sdk.LatLngBounds();
@@ -350,7 +450,17 @@ export function createMap(preview) {
       }
       instance.setBounds(bounds,80,64,Math.min(bottom,viewport.height * .72),Math.min(left,viewport.width * .68));
     },
-    setLivePosition(point, {follow = false} = {}) {
+    setLivePosition(point, {follow = false, heading:gpsHeading, accuracy} = {}) {
+      if (navigationOwner === 'gps') {
+        gpsMarker?.setMap(null);
+        gpsMarker = null;
+        if (point) aimCamera(point,{gpsHeading,accuracy,points:route?.points});
+        else {
+          navigationPoint = bearingPoint = null;
+          vehicle.hidden = true;
+        }
+        return;
+      }
       if (!instance || !point) {
         gpsMarker?.setMap(null);
         gpsMarker = null;
@@ -373,11 +483,17 @@ export function createMap(preview) {
     },
     setSimulation(value) {
       if (value.offline) {
-        if (!instance && !exampleMode) chooseMode('example');
+        if (!exampleMode) chooseMode('example');
+        if (navigationOwner === 'simulation') aimCamera(value.position,{points:value.points});
         offline.setSnapshot(value);
         return;
       }
       if (!instance) return;
+      if (navigationOwner === 'simulation') {
+        if (!liveMode) chooseMode('live');
+        aimCamera(value.position,{points:value.points});
+        return;
+      }
       const position = latLng(value.position);
       if (!simulatedMarker) {
         this.focusRoute(value.points);

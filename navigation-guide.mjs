@@ -81,7 +81,7 @@ export function initNavigationGuide({card,speak,searchParking}) {
         passedWaypoints:0,nearAnnounced:false,arrivalAnnounced:false};
       dock.prepend(card);
       card.hidden = false;
-      text(turn,'경로 위치를 확인하고 있어요.');
+      text(turn,owner === 'gps' ? 'GPS 위치를 확인하고 있어요.' : '경로 안내를 준비하고 있어요.');
       text(distance,'');
       text(road,'');
       text(stats,'');
@@ -128,7 +128,7 @@ export function initNavigationGuide({card,speak,searchParking}) {
         if (announce && !session.arrivalAnnounced && speak('목적지에 도착했습니다.')) session.arrivalAnnounced = true;
         return;
       }
-      const eta = owner === 'gps' && Number.isFinite(state.seconds)
+      const eta = Number.isFinite(state.seconds)
         ? ' · 도착 예정 '+new Date(Date.now()+state.seconds*1000).toLocaleTimeString('ko-KR',{hour:'numeric',minute:'2-digit'}) : '';
       text(stats,'남은 '+metersText(state.remaining)+
         (Number.isFinite(state.seconds) ? ' · '+minutesText(state.seconds) : '')+eta);
