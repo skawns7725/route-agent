@@ -10,5 +10,5 @@
       "onAutoForward": "notify"
     }
   },
-  "postAttachCommand": "node serve.cjs > /tmp/route-agent.log 2>&1 &"
+  "postStartCommand": ["bash", ".devcontainer/start-preview.sh"]
 }
