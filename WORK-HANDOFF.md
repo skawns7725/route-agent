@@ -1,9 +1,9 @@
 Last-Author: Codex
 
-## 2026-11-20 GPS 출발지 보정과 홈 화면 2단계
+## 2026-11-20 경로 패널 3단계와 최근검색
 
-- `routing.js`, `driving.mjs`에서 실제 주행 시작 직전 임시 GPS 출발지만 다시 확인한다. 정확도 100m 이내이고 이동 거리 100m 초과일 때 선택한 경로 옵션과 경유지를 유지해 다시 조회한다. 위치 확인이나 경로 조회에 실패하면 기존 경로로 안내한다.
-- `gps-departure.mjs`, `gps-departure.test.mjs`, `simulation.js`, `serve.cjs`에서 거리 계산을 공유하고 보정 기준을 단위 테스트한다.
-- `route-agent-demo.html`, `map.css`, `app.js`, `place-search.mjs`에서 검색·마이크·기온을 지도 위에, 빠른 목적지를 지도 아래에 배치했다. 기온과 소요 시간은 예시값이다. 집은 저장된 장소를 사용한다.
-- `node --test` 40개, 변경 JS 구문 검사, `git diff --check` 통과. 코드 검토로 주행 진입점을 확인했다. 브라우저와 실기기 GPS 검증은 생략했고 시안 원본은 제공되지 않았다.
-- 다음 작업은 PR 리뷰다. 이전 운영 이슈는 `docs/CODESPACES_RECOVERY.md`와 Git 이력을 참고한다.
+- 목표는 `main`의 `53e4660`을 기준으로 자동차 경로 패널과 출발지·도착지 최근검색을 구현하는 것이다.
+- `routing.js`와 `map.css`에 입력 행, 이동 수단, 추천·대안 카드와 추천 경로 GPS 주행 버튼을 추가했다. 카드의 시간·거리는 카카오 조회값을 사용한다. 출발지·도착지 입력 아래에 빠른 장소와 최근검색·장소·경로 메뉴를 표시한다. 최근 항목을 선택하면 필요한 장소가 모두 지정된 경우 바로 경로를 비교한다.
+- `recent-searches.mjs`, `recent-searches.test.mjs`, `place-search.mjs`, `serve.cjs`에서 검색 기록을 기기 저장소에 최대 20개까지 보관하고 좌표 기준 중복 병합, 개별 삭제, 전체 삭제를 지원한다.
+- `node --test` 42개, 변경 JS 구문 검사와 `git diff --check` 통과. 서면 시안을 기준으로 구현했으며 브라우저와 실기기 검증은 생략했다.
+- 다음 작업은 PR 리뷰다. 이전 운영 이슈는 `docs/CODESPACES_RECOVERY.md`를 참고한다.

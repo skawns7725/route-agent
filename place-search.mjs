@@ -207,7 +207,7 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
       const place = markers[selection];
       if (!place) return;
       closeSearch();
-      chooseRoutePlace(slot,place);
+      chooseRoutePlace(slot,place,{fromSearch:true});
     };
   }
   el('mapSearch').addEventListener('keydown',event=>{
