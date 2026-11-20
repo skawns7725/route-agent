@@ -1,63 +1,28 @@
-function normalizePlace(item) {
-  const address = (item.road_address_name || item.address_name || '').trim();
-  const name = (item.place_name || address).trim();
-  const lat = Number(item.y);
-  const lng = Number(item.x);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
-      !String(item.y ?? '').trim() || !String(item.x ?? '').trim() ||
-      Math.abs(lat) > 90 || Math.abs(lng) > 180 || !name) return null;
-  return {
-    lat,lng,name,address,
-    category:(item.category_name || '').split('>').at(-1).trim(),
-    phone:(item.phone || '').trim()
+async function fetchPlaces(path, params, message) {
+  try {
+    const response = await fetch(path+'?'+new URLSearchParams(params),{signal:AbortSignal.timeout(10000)});
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data?.places)) return data.places;
+    }
+  } catch {
+    // Keep connection and response errors in the same user-facing state.
+  }
+  throw new Error(message);
+}
+
+export function createPlaceLookup() {
+  return keyword=>fetchPlaces('/api/places',{keyword},'장소를 가져오지 못했어요. 다시 검색해 주세요.');
+}
+
+export function createParkingLookup() {
+  return async destination=>{
+    const {lat,lng} = destination ?? {};
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      throw new Error('도착지 위치를 확인할 수 없어요.');
+    }
+    return fetchPlaces('/api/parking',{lat,lng},'주차장을 가져오지 못했어요. 다시 검색해 주세요.');
   };
-}
-
-export function createPlaceLookup(sdk) {
-  const {Status,Places,Geocoder} = sdk.services;
-  const places = new Places();
-  const geocoder = new Geocoder();
-  return keyword=>new Promise((resolve,reject)=>{
-    function finish(items,status) {
-      if (status === Status.ZERO_RESULT) return resolve([]);
-      if (status !== Status.OK) return reject(new Error('장소를 가져오지 못했어요. 다시 검색해 주세요.'));
-      resolve(Array.isArray(items) ? items.map(normalizePlace).filter(Boolean) : []);
-    }
-    places.keywordSearch(keyword,(items,status)=>{
-      if (status === Status.ZERO_RESULT) geocoder.addressSearch(keyword,finish);
-      else finish(items,status);
-    });
-  });
-}
-
-const parkingRadius = 1000;
-
-export function createParkingLookup(sdk) {
-  const {Status,Places,SortBy} = sdk.services;
-  const places = new Places();
-  return destination=>new Promise((resolve,reject)=>{
-    if (!Number.isFinite(destination?.lat) || !Number.isFinite(destination?.lng) ||
-        Math.abs(destination.lat) > 90 || Math.abs(destination.lng) > 180) {
-      reject(new Error('도착지 위치를 확인할 수 없어요.'));
-      return;
-    }
-    places.categorySearch('PK6',(items,status)=>{
-      if (status === Status.ZERO_RESULT) return resolve([]);
-      if (status !== Status.OK) return reject(new Error('주차장을 가져오지 못했어요. 다시 검색해 주세요.'));
-      const parking = [];
-      for (const item of Array.isArray(items) ? items : []) {
-        const place = item && normalizePlace(item);
-        if (!place) continue;
-        const raw = String(item.distance ?? '').trim();
-        const distance = /^\d+$/.test(raw) && Number(raw) <= parkingRadius ? Number(raw) : null;
-        parking.push({...place,distance});
-      }
-      return resolve(parking);
-    },{
-      location:new sdk.LatLng(destination.lat,destination.lng),
-      radius:parkingRadius,sort:SortBy.DISTANCE,size:10
-    });
-  });
 }
 
 export function naverPlaceUrl({name,address}) {
@@ -199,9 +164,9 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
     if (!details.hidden) el('mapPlaceBack').click();
     else el('mapSearchDismiss').click();
   });
-  map.onReady(({sdk})=>{
-    lookup = createPlaceLookup(sdk);
-    parkingLookup = createParkingLookup(sdk);
+  map.onReady(()=>{
+    lookup = createPlaceLookup();
+    parkingLookup = createParkingLookup();
     input.disabled = submit.disabled = false;
   });
   return {

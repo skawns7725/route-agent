@@ -1,5 +1,11 @@
 Last-Author: Codex
 
+## 2026-11-20 카카오 장소·주차장 검색 프록시
+
+- `codex/navigation-mode`의 `3599d06`에서 `codex/place-search-proxy`를 분기했다. verbose-bassoon 미리보기에서 지도는 표시되지만 SDK 장소 요청은 401이라는 보고에 따라 `place-search.mjs`의 장소·주차장 조회를 same-origin 서버 요청으로 바꿨다. 경로 패널과 지도 검색이 같은 장소 조회 함수를 사용한다.
+- `serve.cjs`의 `GET /api/places`는 카카오 키워드 검색을 호출하고 결과가 비면 주소 검색으로 전환한다. `GET /api/parking`은 도착지 반경 1km의 주차장을 거리순으로 요청한다. 기존 서버 환경변수 `KAKAO_MOBILITY_REST_KEY`를 재사용하고 브라우저에는 정규화한 검색 결과만 제공한다.
+- 교차 출처 403, 빈 검색어·유효하지 않은 좌표 400, 키 미설정 503, 카카오 인증 실패 시 원본 응답을 제외한 502를 확인했다. `node --test` 34개 통과. verbose-bassoon의 키 권한과 실제 카카오 응답은 검증하지 않았다.
+
 ## 2026-11-20 탐색·주행 모드 분리
 
 - `main`의 `833ff5d`에서 `codex/navigation-mode`를 분기했다. `app.js`와 `map.css`에서 선택 경로의 주행 시작, 카카오 경로 재생, 오프라인 예시를 공통 주행 화면으로 연결했다. 주행 종료 시 탐색 패널과 포커스를 복원한다.
