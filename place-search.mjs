@@ -220,7 +220,7 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
   map.onReady(()=>{
     lookup = createPlaceLookup();
     parkingLookup = createParkingLookup();
-    input.disabled = submit.disabled = false;
+    input.disabled = submit.disabled = el('mapSearchMic').disabled = false;
   });
   return {
     searchParking(destination) {

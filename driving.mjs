@@ -67,7 +67,7 @@ function distanceText(meters) {
     : Math.round(meters) + 'm';
 }
 
-export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom, onSpeed}) {
+export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom, onSpeed, prepareDeparture, onDepartureNotice}) {
   const content = document.getElementById('drivingContent');
   const dock = document.getElementById('drivingDock');
   content.innerHTML = `
@@ -110,6 +110,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
   let legDistance = 0;
   let session = 0;
   let watching = false;
+  let preparing = false;
 
   function status(text) {
     for (const node of statuses) if (node.textContent !== text) node.textContent = text;
@@ -169,7 +170,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
     const nextGeometry = route && prepareRouteGeometry(route.points);
     geometry = nextGeometry?.length > 0 ? nextGeometry : null;
     el('driveRouteHint').textContent = geometry ? '선택한 경로 · ' + route.name : '경로를 비교한 뒤 주행할 도로 경로를 선택해 주세요.';
-    button.disabled = !geometry || watching;
+    button.disabled = !geometry || watching || preparing;
     if (!watching) status('');
   }
 
@@ -202,6 +203,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
       showMapRoute(route);
       nextSignal.start('gps',geometry,dock);
       navigation.start('gps',route,dock);
+    onDepartureNotice(departure.notice || '');
       status('교통을 반영한 경로로 안내하고 있어요.');
     } catch (error) {
       if (rerouteRequest === request) status(error.message || '새 경로를 찾지 못했어요.');
@@ -260,10 +262,24 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
     },freshnessMs - Math.max(age,0));
   }
 
-  function start() {
-    if (watching || !geometry) return false;
-    if (!map.connected() || !navigator.geolocation) {
-      status('카카오 지도에 연결하고 위치 권한을 허용한 뒤 주행을 시작해 주세요.');
+  async function start() {
+    if (watching || preparing || !geometry) return false;
+    if (!map.connected()) {
+      status('카카오 지도에 연결한 뒤 주행을 시작해 주세요.');
+      return false;
+    }
+    preparing = true;
+    button.disabled = true;
+    let departure;
+    try {
+      departure = await prepareDeparture();
+    } finally {
+      preparing = false;
+      button.disabled = !geometry;
+    }
+    if (!departure || !geometry) return false;
+    if (!navigator.geolocation && !departure.allowWithoutGps) {
+      status('위치 권한을 허용한 뒤 주행을 시작해 주세요.');
       return false;
     }
     const token = ++session;
@@ -280,14 +296,16 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
     openPanel('driving',{playing:true});
     nextSignal.start('gps', geometry, dock);
     navigation.start('gps',route,dock);
+    onDepartureNotice(departure.notice || '');
 
     try {
-      const id = navigator.geolocation.watchPosition(position=>{
+      const id = navigator.geolocation?.watchPosition(position=>{
         if (token === session) update(position);
       },error=>{
         if (token !== session) return;
         if (error.code === 1) {
-          finish('위치 권한을 허용한 뒤 GPS 주행을 다시 시작해 주세요.');
+          if (departure.allowWithoutGps) status('위치 권한이 없어 GPS 위치를 표시할 수 없어요.');
+          else finish('위치 권한을 허용한 뒤 GPS 주행을 다시 시작해 주세요.');
           return;
         }
         discardPosition();
@@ -297,8 +315,12 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
       if (token === session) watchId = id;
       else navigator.geolocation.clearWatch(id);
     } catch {
-      finish('GPS 주행을 시작할 수 없어요. 기기의 위치 설정을 확인해 주세요.');
-      return false;
+      const message = 'GPS 위치를 표시할 수 없어요. 기기의 위치 설정을 확인해 주세요.';
+      if (departure.allowWithoutGps) status(message);
+      else {
+        finish(message);
+        return false;
+      }
     }
     return true;
   }

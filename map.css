@@ -675,3 +675,109 @@ button { text-align: center; }
   #tileState { max-width: 130px; }
   .map-action { padding-inline: 6px; }
 }
+
+#workspace:not(.navigation-mode, .panel-open) {
+  --home-top: max(12px, env(safe-area-inset-top));
+  --home-map-top: calc(var(--home-top) + 66px);
+  --home-map-bottom: calc(var(--bottom-bar) + 70px);
+}
+#workspace:not(.navigation-mode, .panel-open):has(.route-summary:not([hidden]), .playback:not([hidden])) {
+  --home-map-bottom: calc(var(--bottom-bar) + var(--gutter));
+}
+#workspace:not(.navigation-mode, .panel-open) :is(.map-layer, .map-placeholder) {
+  top: var(--home-map-top);
+  bottom: var(--home-map-bottom);
+  border-radius: 18px;
+}
+#workspace:not(.navigation-mode, .panel-open) .map-layer {
+  height: calc(100% - var(--home-map-top) - var(--home-map-bottom));
+}
+#workspace:not(.navigation-mode, .panel-open) .map-header {
+  top: calc(var(--home-map-top) + 10px);
+}
+#workspace:not(.navigation-mode, .panel-open) .map-search {
+  top: var(--home-top);
+  left: max(9px, var(--map-start));
+  width: min(540px, calc(100% - var(--map-start) - 104px));
+}
+#workspace:not(.navigation-mode, .panel-open) .map-zoom {
+  top: calc(var(--home-map-top) + 77px);
+}
+#workspace:not(.navigation-mode, .panel-open) .map-credit {
+  bottom: calc(var(--home-map-bottom) + 5px);
+}
+#workspace:not(.navigation-mode, .panel-open) .sample-shortcut {
+  bottom: calc(var(--home-map-bottom) + 23px);
+}
+.map-search-form .map-search-mic {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.map-search-mic[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.map-speech-status, .departure-notice {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+.home-weather, .home-destinations { display: none; }
+#workspace:not(.navigation-mode, .panel-open) .home-weather {
+  position: absolute;
+  top: var(--home-top);
+  right: max(9px, var(--gutter));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 52px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-weight: 750;
+  white-space: nowrap;
+}
+.home-weather span { color: var(--accent); }
+#workspace:not(.navigation-mode, .panel-open):not(:has(.route-summary:not([hidden]), .playback:not([hidden]))) .home-destinations {
+  position: absolute;
+  left: max(9px, var(--map-start));
+  right: max(9px, var(--gutter));
+  bottom: calc(var(--bottom-bar) + 12px);
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.home-destinations button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1 1 0;
+  max-width: 160px;
+  min-height: 46px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+.home-destinations button:hover { background: var(--primary-soft); }
+.home-destinations span { color: var(--muted); font-size: 13px; }
+@media (width < 768px) {
+  #workspace:not(.navigation-mode, .panel-open) :is(.map-layer, .map-placeholder) {
+    left: 9px;
+    right: 9px;
+  }
+  #workspace:not(.navigation-mode, .panel-open) .map-layer { width: calc(100% - 18px); }
+}

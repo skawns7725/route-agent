@@ -1,3 +1,4 @@
+import {departureCorrection} from './gps-departure.mjs';
 import {createPlaceLookup} from './place-search.mjs';
 import {normalizeSavedPlace,readSavedPlaces,savePlace,removePlace,writeSavedPlaces} from './saved-places.mjs';
 
@@ -67,7 +68,7 @@ function actionButton(label,action) {
   return button;
 }
 
-export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPanel,searchParking}) {
+export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPanel,searchParking,routePreference}) {
   const root = document.getElementById('routeContent');
   root.innerHTML = `
     <div class="route-toolbar inline-actions">
@@ -155,6 +156,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   let nextWaypointId = 1;
   let lookup, sdk, controller, futureRequest, fastest, selectedRoute = null;
   let gpsPending = false;
+  let departureRequest;
   let storage;
   try { storage = window.localStorage; } catch { /* Device storage can be blocked. */ }
   let savedPlaces = readSavedPlaces(storage);
@@ -170,6 +172,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   }
 
   function clearResults() {
+    departureRequest?.abort();
     controller?.abort();
     controller = null;
     selectedRoute = null;
@@ -467,6 +470,66 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     }, {timeout:10000,maximumAge:0});
   }
 
+  async function prepareDeparture() {
+    const original = selectedRoute;
+    const origin = original?.origin;
+    if (origin?.ephemeral !== true || origin.name !== '현재 위치') return {};
+    status.textContent = '출발지의 현재 위치를 확인하고 있어요…';
+    const fix = await new Promise(resolve=>{
+      if (!navigator.geolocation) return resolve(null);
+      const timer = setTimeout(()=>resolve(null),10000);
+      const finish = value=>{
+        clearTimeout(timer);
+        resolve(value);
+      };
+      try {
+        navigator.geolocation.getCurrentPosition(
+          ({coords:{latitude:lat,longitude:lng,accuracy}})=>finish({lat,lng,accuracy}),
+          ()=>finish(null),
+          {enableHighAccuracy:true,maximumAge:0,timeout:10000}
+        );
+      } catch {
+        finish(null);
+      }
+    });
+    if (selectedRoute !== original) return null;
+    const decision = departureCorrection(origin,fix);
+    if (decision === 'keep') {
+      status.textContent = '지도에 표시할 경로를 선택해 주세요.';
+      return {};
+    }
+    if (decision === 'unavailable') {
+      const notice = '현재 위치를 확인할 수 없어 설정한 출발지로 안내해요.';
+      status.textContent = notice;
+      return {notice,allowWithoutGps:true};
+    }
+
+    status.textContent = '현재 위치에서 새 경로를 찾고 있어요…';
+    const request = departureRequest = new AbortController();
+    const updated = {...origin,lat:fix.lat,lng:fix.lng};
+    const {destination,waypoints:stops,kind} = original;
+    try {
+      const data = await requestRoute('/api/route-comparison',tripParams(updated,destination,stops),request.signal);
+      if (selectedRoute !== original) return null;
+      const choice = data.options.find(option=>option.kind === kind);
+      if (!choice?.route || routePoints(choice.route).length < 2) throw Error();
+      slots.start.place = updated;
+      departureRequest = null;
+      clearResults();
+      showOptions(data,kind);
+      const notice = '출발지를 현재 위치로 수정했어요. 경로를 다시 찾았어요.';
+      status.textContent = notice;
+      return {notice};
+    } catch {
+      if (selectedRoute !== original) return null;
+      const notice = '현재 위치에서 새 경로를 찾지 못해 설정한 출발지로 안내해요.';
+      status.textContent = notice;
+      return {notice};
+    } finally {
+      if (departureRequest === request) departureRequest = null;
+    }
+  }
+
   function selectRoute(option, buttons) {
     const {route,kind} = option;
     const {place:origin} = slots.start;
@@ -507,7 +570,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     map.focusRoute(selectedRoute.points);
   }
 
-  function showOptions(data) {
+  function showOptions(data, preferredKind) {
     const buttons = new Map();
     const congested = data.options.find(option => option.kind === 'traffic')?.route;
     for (const option of data.options) {
@@ -537,7 +600,9 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
       button.append(name,metrics);
       options.append(button);
     }
-    const first = buttons.values().next().value;
+    const available = [...buttons.values()];
+    const first = available.find(option=>option.kind === preferredKind && routePoints(option.route).length >= 2)
+      || available.find(option=>routePoints(option.route).length >= 2);
     if (first) selectRoute(first,buttons);
     const time = new Date(data.fetchedAt);
     const fast = data.options.find(option=>option.kind === 'fast')?.route;
@@ -570,7 +635,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
       const data = await requestRoute('/api/route-comparison',params,request.signal);
       if (controller !== request) return;
       status.textContent = '지도에 표시할 경로를 선택해 주세요.';
-      showOptions(data);
+      showOptions(data,routePreference());
     } catch (error) {
       if (controller === request) status.textContent = error.name === 'TimeoutError'
         ? '경로 조회가 지연되고 있어요. 다시 시도해 주세요.'
@@ -670,7 +735,8 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     for (const slot of tripSlots()) if (slot.input.value && !slot.place) searchPlace(slot);
   });
   return {
-    focusGps,
+    focusGps,prepareDeparture,
+    savedHome:()=>savedPlaces.home,
     chooseMapPlace(slot,place) {
       openPanel('route');
       choosePlace(slots[slot],place,false);
