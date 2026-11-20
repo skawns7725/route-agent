@@ -1,3 +1,4 @@
+import {readRecentSearches,recordRecentSearch,removeRecentSearch,writeRecentSearches} from './recent-searches.mjs';
 import {departureCorrection} from './gps-departure.mjs';
 import {createPlaceLookup} from './place-search.mjs';
 import {normalizeSavedPlace,readSavedPlaces,savePlace,removePlace,writeSavedPlaces} from './saved-places.mjs';
@@ -13,6 +14,7 @@ const savedLabels = {home:'집',work:'회사',favorites:'즐겨찾기',recent:'�
 const waypointLimit = 5;
 const formatDistance = meters => (meters/1000).toLocaleString('ko-KR',{maximumFractionDigits:1})+' km';
 const formatDuration = seconds => seconds < 60 ? '1분 미만' : '약 '+Math.round(seconds/60)+'분';
+const formatRecentDate = new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric'});
 const formatClock = new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'numeric',minute:'2-digit'});
 const coordinates = ({lng,lat})=>lng+','+lat;
 
@@ -71,14 +73,17 @@ function actionButton(label,action) {
 export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPanel,searchParking,routePreference}) {
   const root = document.getElementById('routeContent');
   root.innerHTML = `
-    <div class="route-toolbar inline-actions">
-      <button class="secondary" id="routeSeoul" type="button" disabled>서울시청 → 서울역 검색</button>
-      <button class="secondary" id="routeUlsan" type="button" disabled>태화로터리 → 울산시청 검색</button>
-      <button class="secondary" id="routeGps" type="button">현 위치에서 출발</button>
-      <button class="secondary" id="routeSwap" type="button">출발·도착 바꾸기</button>
-    </div>
     <form id="routeForm">
       <div class="route-fields" id="routeFields"></div>
+      <div class="route-modes" role="group" aria-label="이동 수단">
+        <button type="button" aria-pressed="true"><span aria-hidden="true">🚘</span>자동차</button>
+      </div>
+      <div class="route-toolbar inline-actions">
+        <button class="secondary" id="routeSeoul" type="button" disabled>서울시청 → 서울역 검색</button>
+        <button class="secondary" id="routeUlsan" type="button" disabled>태화로터리 → 울산시청 검색</button>
+        <button class="secondary" id="routeGps" type="button">현 위치에서 출발</button>
+        <button class="secondary" id="routeSwap" type="button">출발·도착 바꾸기</button>
+      </div>
       <div class="inline-actions">
         <button class="secondary" id="routeVia" type="button" aria-controls="route-via" aria-describedby="routeViaCount">경유지 추가</button>
         <span id="routeViaCount" class="muted">0 / 5개</span>
@@ -160,6 +165,14 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   let storage;
   try { storage = window.localStorage; } catch { /* Device storage can be blocked. */ }
   let savedPlaces = readSavedPlaces(storage);
+  let recentSearches = readRecentSearches(storage);
+  let historyInMemory = false;
+
+  function changeHistory(update) {
+    const current = historyInMemory ? recentSearches : readRecentSearches(storage);
+    recentSearches = update(current);
+    historyInMemory = !writeRecentSearches(storage,recentSearches);
+  }
 
   function tripSlots() {
     return [slots.start,...waypoints,slots.end];
@@ -262,6 +275,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
 
   function choosePlace(slot, place, focusMap = true) {
     cancelLookup(slot);
+    if (slot.history) slot.history.hidden = true;
     slot.place = place;
     slot.input.value = place.name;
     clearResults();
@@ -284,8 +298,9 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
       button.className = 'route-place-option';
       button.textContent = address && name !== address ? name+' · '+address : name;
       button.addEventListener('click',() => {
-        choosePlace(slot,place);
+        if (slot.history) changeHistory(entries => recordRecentSearch(entries,place));
         slot.input.focus();
+        choosePlace(slot,place);
       });
       slot.results.append(button);
     }
@@ -306,33 +321,162 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     }
   }
 
+  function pickHistoryPlace(slot,place) {
+    choosePlace(slot,place);
+    const missing = tripSlots().find(candidate => !candidate.place);
+    if (missing) {
+      missing.input.focus();
+      return;
+    }
+    compare.focus();
+    compareTrip();
+  }
+
+  function renderHistory(slot,focusSelector) {
+    const book = readSavedPlaces(storage);
+    const saved = [book.home,book.work,...book.favorites,...book.recent].filter(Boolean);
+    const history = slot.history;
+    history.innerHTML = `
+      <div class="route-quick-chips" aria-label="빠른 장소"></div>
+      <div class="route-search-tabs" role="group" aria-label="검색 분류"></div>
+      <div class="route-history-content"></div>
+    `;
+    const chips = history.querySelector('.route-quick-chips');
+    const tabs = history.querySelector('.route-search-tabs');
+    const content = history.querySelector('.route-history-content');
+    const openTab = tab => {
+      slot.historyTab = tab;
+      renderHistory(slot,'[data-tab="'+tab+'"]');
+    };
+
+    for (const [key,label] of [['home','집'],['work','회사']]) {
+      const place = book[key];
+      const chip = actionButton(label,() => pickHistoryPlace(slot,place));
+      chip.disabled = !place;
+      chips.append(chip);
+    }
+    if (saved.length) chips.append(actionButton('저장된 장소',() => openTab('places')));
+
+    for (const [key,label] of [['recent','최근검색'],['places','장소'],['routes','경로']]) {
+      const tab = actionButton(label,() => openTab(key));
+      tab.dataset.tab = key;
+      tab.setAttribute('aria-pressed',String(slot.historyTab === key));
+      tabs.append(tab);
+    }
+
+    if (slot.historyTab === 'places') {
+      const unique = new Set();
+      for (const place of saved) {
+        const key = coordinates(place);
+        if (unique.has(key)) continue;
+        unique.add(key);
+        content.append(actionButton(place.name,() => pickHistoryPlace(slot,place)));
+      }
+      if (!saved.length) content.textContent = '저장된 장소가 없어요.';
+    } else if (slot.historyTab === 'routes') {
+      const current = options.querySelector('[aria-pressed="true"]');
+      if (current) {
+        content.append(actionButton(selectedRoute.tripLabel,() => current.focus()));
+      } else {
+        content.textContent = '비교한 경로가 없어요.';
+      }
+    } else if (recentSearches.length) {
+      const clear = actionButton('전체 삭제',() => {
+        changeHistory(() => []);
+        renderHistory(slot,'[data-tab="recent"]');
+      });
+      clear.classList.add('route-history-clear');
+      const list = document.createElement('ul');
+      for (const [index,place] of recentSearches.entries()) {
+        const item = document.createElement('li');
+        const pick = actionButton(place.name,() => {
+          changeHistory(entries => recordRecentSearch(entries,place));
+          pickHistoryPlace(slot,place);
+        });
+        pick.classList.add('route-history-pick');
+        const date = document.createElement('time');
+        date.dateTime = new Date(place.searchedAt).toISOString();
+        date.textContent = formatRecentDate.format(place.searchedAt).replaceAll(' ','');
+        const remove = actionButton('×',() => {
+          changeHistory(entries => removeRecentSearch(entries,place));
+          const next = Math.min(index,recentSearches.length-1);
+          renderHistory(slot,next < 0 ? '[data-tab="recent"]' : '[data-remove="'+next+'"]');
+        });
+        remove.dataset.remove = index;
+        remove.setAttribute('aria-label',place.name+' 최근검색 삭제');
+        item.append(pick,date,remove);
+        list.append(item);
+      }
+      content.append(clear,list);
+    } else {
+      content.textContent = '최근 검색한 장소가 없어요.';
+    }
+    if (focusSelector) history.querySelector(focusSelector)?.focus();
+  }
+
   function createSlot(id,labelText) {
     const row = document.createElement('div');
     row.id = 'route-'+id;
+    const endpoint = id === 'start' || id === 'end';
+    row.classList.toggle('route-endpoint',endpoint);
     const field = document.createElement('label');
     field.className = 'field';
     const label = document.createElement('span');
     label.textContent = labelText;
     const input = document.createElement('input');
-    input.placeholder = id === 'start' ? '장소 이름 또는 주소' : id === 'end' ? '목적지 검색' : '경유할 장소 검색';
+    input.placeholder = id === 'start' ? '내 위치' : id === 'end' ? '목적지 검색' : '경유할 장소 검색';
     input.autocomplete = 'off';
+    input.maxLength = 150;
     const results = document.createElement('div');
     results.className = 'route-place-results';
     results.setAttribute('role','status');
     field.append(label,input);
     row.append(field,results);
     const slot = {row,label,input,results,place:null,version:0};
+    if (endpoint) {
+      const history = document.createElement('div');
+      history.className = 'route-search-history';
+      history.hidden = true;
+      slot.history = history;
+      row.append(history);
+      const openHistory = () => {
+        if ((!slot.place && input.value.trim()) || !history.hidden) return;
+        slot.historyTab = 'recent';
+        recentSearches = historyInMemory ? recentSearches : readRecentSearches(storage);
+        renderHistory(slot);
+        history.hidden = false;
+      };
+      input.addEventListener('focus',openHistory);
+      input.addEventListener('click',openHistory);
+      row.addEventListener('focusout',event => {
+        if (event.relatedTarget && !row.contains(event.relatedTarget)) history.hidden = true;
+      });
+      row.addEventListener('keydown',event => {
+        if (event.key !== 'Escape' || history.hidden) return;
+        event.preventDefault();
+        event.stopPropagation();
+        input.focus();
+        history.hidden = true;
+      });
+      slot.openHistory = openHistory;
+    }
     input.addEventListener('input',() => {
       slot.place = null;
       cancelLookup(slot);
       clearResults();
+      if (slot.history) {
+        if (input.value.trim()) slot.history.hidden = true;
+        else slot.openHistory();
+      }
       if (!sdk) return;
       status.textContent = '검색 결과에서 장소를 선택해 주세요.';
       slot.timer = setTimeout(() => searchPlace(slot),250);
     });
     input.addEventListener('keydown',event => {
       if (event.key === 'ArrowDown') {
-        const result = results.querySelector('button');
+        const result = slot.history && !slot.history.hidden
+          ? slot.history.querySelector('.route-history-pick, .route-search-tabs button')
+          : results.querySelector('button');
         if (!result) return;
         event.preventDefault();
         result.focus();
@@ -369,6 +513,11 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   slots.start = createSlot('start',slotLabels.start);
   slots.end = createSlot('end',slotLabels.end);
   fields.append(slots.start.row,viaFields,slots.end.row);
+  document.addEventListener('pointerdown',event => {
+    for (const slot of [slots.start,slots.end]) {
+      if (!slot.row.contains(event.target)) slot.history.hidden = true;
+    }
+  });
 
   function updateWaypoints() {
     viaFields.hidden = !waypoints.length;
@@ -428,6 +577,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     const {start,end} = slots;
     cancelLookup(start);
     cancelLookup(end);
+    start.history.hidden = end.history.hidden = true;
     [start.place,end.place] = [end.place,start.place];
     [start.input.value,end.input.value] = [end.input.value,start.input.value];
     waypoints.reverse();
@@ -573,20 +723,26 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   function showOptions(data, preferredKind) {
     const buttons = new Map();
     const congested = data.options.find(option => option.kind === 'traffic')?.route;
+    const usable = data.options.filter(option => option.route && routePoints(option.route).length >= 2);
+    const recommended = usable.find(option => option.kind === 'fast') || usable[0];
     for (const option of data.options) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'route-option';
       const name = document.createElement('span');
       name.className = 'route-option-name';
-      name.textContent = labels[option.kind];
+      name.textContent = option === recommended ? '추천 경로 · '+labels[option.kind] : labels[option.kind];
       const metrics = document.createElement('span');
       metrics.className = 'route-option-metrics';
+      const timing = document.createElement('span');
+      timing.className = 'route-option-timing';
       if (option.route) {
         const {summary} = option.route;
-        metrics.textContent = [
-          formatDuration(summary.duration), formatDistance(summary.distance), routeFare(summary.fare?.toll)
-        ].join(' · ');
+        const duration = document.createElement('strong');
+        duration.textContent = formatDuration(summary.duration).replace(/^약 /,'');
+        timing.append(duration,' ',formatDistance(summary.distance).replace(' km','km'));
+        metrics.textContent = routeFare(summary.fare?.toll);
+        if (option === recommended && option.traffic) metrics.textContent = '실시간 교통 반영 · '+metrics.textContent;
         if (option.kind === 'traffic') {
           metrics.textContent += ' · 정체·지체 '+Math.round(option.traffic.share*100)+'%';
         }
@@ -597,12 +753,25 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
         button.disabled = true;
         metrics.textContent = option.error || '이 조건의 경로를 찾지 못했어요.';
       }
-      button.append(name,metrics);
-      options.append(button);
+      button.append(name);
+      if (option.route) button.append(timing);
+      button.append(metrics);
+      if (option === recommended) {
+        const card = document.createElement('div');
+        card.className = 'route-recommended';
+        const play = actionButton('▶',() => {
+          selectRoute(option,buttons);
+          startDrive();
+        });
+        play.className = 'primary route-play';
+        play.setAttribute('aria-label','추천 경로 GPS 주행 시작');
+        card.append(button,play);
+        options.prepend(card);
+      } else {
+        options.append(button);
+      }
     }
-    const available = [...buttons.values()];
-    const first = available.find(option=>option.kind === preferredKind && routePoints(option.route).length >= 2)
-      || available.find(option=>routePoints(option.route).length >= 2);
+    const first = usable.find(option => option.kind === preferredKind) || usable[0];
     if (first) selectRoute(first,buttons);
     const time = new Date(data.fetchedAt);
     const fast = data.options.find(option=>option.kind === 'fast')?.route;
@@ -613,8 +782,12 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     source.hidden = false;
   }
 
-  find('routeForm').addEventListener('submit',async event => {
+  find('routeForm').addEventListener('submit',event => {
     event.preventDefault();
+    compareTrip();
+  });
+
+  async function compareTrip() {
     if (!sdk || controller) return;
     const {start,end} = slots;
     const places = tripSlots().map(slot=>slot.place);
@@ -646,7 +819,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
         compare.disabled = false;
       }
     }
-  });
+  }
   parking.addEventListener('click',()=>{if (slots.end.place) searchParking?.(slots.end.place);});
 
   function futureItem(label,value,error) {
@@ -715,6 +888,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     for (const [id,query] of [['start',origin],['end',destination]]) {
       const slot = slots[id];
       cancelLookup(slot);
+      slot.history.hidden = true;
       slot.place = null;
       slot.input.value = query;
     }
@@ -737,7 +911,8 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   return {
     focusGps,prepareDeparture,
     savedHome:()=>savedPlaces.home,
-    chooseMapPlace(slot,place) {
+    chooseMapPlace(slot,place,{fromSearch = false} = {}) {
+      if (fromSearch) changeHistory(entries => recordRecentSearch(entries,place));
       openPanel('route');
       choosePlace(slots[slot],place,false);
       const other = slots[slot === 'start' ? 'end' : 'start'];
