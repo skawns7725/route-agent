@@ -1,5 +1,12 @@
 Last-Author: Codex
 
+## 2026-11-20 사이드바 병합과 테마 1단계
+
+- `main`의 `8f7b5b2`에서 `codex/sidebar-and-theme`를 만들고 `codex/sidebar-settings`를 병합했다. `app.js`의 안내 음성은 `settings.voice`와 `settings.arrivalAlert`를 사용하고 주행 중 주차장 검색은 주행 화면의 주차장 목록을 사용한다. 양쪽 인수인계 항목을 보존했다.
+- `route-agent-demo.html`의 설정에서 라이트·컬러·다크를 선택한다. `app.js`는 선택값을 기존 설정 저장소에 저장하고 새로고침 시 복원한다. 초기값은 컬러다.
+- `map.css`의 테마 변수는 탐색·주행 카드, 버튼, 텍스트와 지도 UI에 적용된다. `map-view.js`는 오프라인 지도와 카카오 경로선을 갱신한다. 카카오 원본 타일은 제공자 색상을 사용한다.
+- 병합 직후와 테마 적용 후 `node --test` 36개 통과. 브라우저 검증은 수행하지 않았다.
+
 ## 2026-11-20 주행 중 주차장과 도착 예정 시각 수정
 
 - `codex/navigation-perspective`의 `b37d53b`에서 `codex/driving-fixes`를 분기했다. `serve.cjs`의 `/api/parking`은 같은 이름과 주소 또는 같은 좌표를 가진 결과를 한 곳으로 합치고, 카카오 거리순 결과에서 처음 나온 항목을 표시한다.

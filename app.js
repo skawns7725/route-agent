@@ -17,6 +17,7 @@ const buttons = [...document.querySelectorAll('[data-panel]')];
 const views = [...panel.querySelectorAll('[data-view]')];
 const settingsKey = 'route-agent.settings';
 const settings = readSettings();
+applyTheme();
 const map = createMap(exampleRoute.points,{
   mapType:settings.mapType,traffic:settings.traffic,onTrafficChange:enabled=>saveSettings({traffic:enabled})
 });
@@ -33,6 +34,7 @@ function readSettings() {
     saved = JSON.parse(window.localStorage.getItem(settingsKey));
   } catch { /* Storage can be blocked or contain invalid JSON. */ }
   return {
+    theme:['light','dark'].includes(saved?.theme) ? saved.theme : 'color',
     voice:saved?.voice === true,
     volume:Number.isInteger(saved?.volume) && saved.volume >= 0 && saved.volume <= 100 ? saved.volume : 80,
     mapType:saved?.mapType === 'hybrid' ? 'hybrid' : 'road',
@@ -43,6 +45,13 @@ function readSettings() {
     signalAlert:saved?.signalAlert !== false,
     arrivalAlert:saved?.arrivalAlert !== false
   };
+}
+
+function applyTheme() {
+  const root = document.documentElement;
+  root.dataset.theme = settings.theme;
+  document.querySelector('meta[name="theme-color"]').content =
+    getComputedStyle(root).getPropertyValue('--background').trim();
 }
 
 function saveSettings(change) {
@@ -246,6 +255,14 @@ const voiceVolume = el('voiceVolume');
 voiceEnabled.checked = settings.voice;
 voiceVolume.value = String(settings.volume);
 el('voiceVolumeValue').value = settings.volume+'%';
+
+const theme = el('settingsTheme');
+theme.value = settings.theme;
+theme.onchange = ()=>{
+  saveSettings({theme:theme.value});
+  applyTheme();
+  map.refreshTheme();
+};
 
 const mapType = el('settingsMapType');
 const routePreference = el('settingsRoute');

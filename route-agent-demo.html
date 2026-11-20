@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f6f8fc">
+  <meta name="theme-color" content="#eaf0ff">
   <title>가는 길에 — 지도</title>
   <link rel="stylesheet" href="/map.css">
   <script type="module" src="/app.js"></script>
@@ -112,6 +112,16 @@
       </section>
       <section id="settingsPanel" data-view="settings" aria-labelledby="settingsTitle" hidden>
         <div class="panel-heading"><span class="panel-icon" aria-hidden="true">⚙</span><div><h1 id="settingsTitle" tabindex="-1">설정</h1><p>이 브라우저에 저장돼요.</p></div></div>
+        <fieldset class="settings-group">
+          <legend>화면</legend>
+          <label class="field">테마
+            <select id="settingsTheme">
+              <option value="light">라이트</option>
+              <option value="color" selected>컬러</option>
+              <option value="dark">다크</option>
+            </select>
+          </label>
+        </fieldset>
         <fieldset class="settings-group">
           <legend>음성</legend>
           <label class="settings-check"><input id="voiceEnabled" type="checkbox"> 주행 음성 안내</label>
