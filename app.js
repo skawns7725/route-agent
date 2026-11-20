@@ -10,13 +10,17 @@ import {initNavigationGuide} from './navigation-guide.mjs';
 const el = id=>document.getElementById(id);
 const workspace = el('workspace');
 const panel = el('toolPanel');
-const railToggle = el('railToggle');
 const playback = el('playback');
 const drivingDock = el('drivingDock');
 const sampleShortcut = el('sampleShortcut');
 const buttons = [...document.querySelectorAll('[data-panel]')];
 const views = [...panel.querySelectorAll('[data-view]')];
-const map = createMap(exampleRoute.points);
+const settingsKey = 'route-agent.settings';
+const settings = readSettings();
+applyTheme();
+const map = createMap(exampleRoute.points,{
+  mapType:settings.mapType,traffic:settings.traffic,onTrafficChange:enabled=>saveSettings({traffic:enabled})
+});
 const compact = matchMedia('(width < 768px)');
 const scrollPositions = new Map();
 let activePanel = null;
@@ -24,8 +28,46 @@ let microphone = null;
 let navigationOwner = null;
 let explorationPanel, explorationFocus, simulationDrive;
 
+function readSettings() {
+  let saved;
+  try {
+    saved = JSON.parse(window.localStorage.getItem(settingsKey));
+  } catch { /* Storage can be blocked or contain invalid JSON. */ }
+  return {
+    theme:['light','dark'].includes(saved?.theme) ? saved.theme : 'color',
+    voice:saved?.voice === true,
+    volume:Number.isInteger(saved?.volume) && saved.volume >= 0 && saved.volume <= 100 ? saved.volume : 80,
+    mapType:saved?.mapType === 'hybrid' ? 'hybrid' : 'road',
+    traffic:saved?.traffic === true,
+    route:['fast','short','traffic','free'].includes(saved?.route) ? saved.route : 'fast',
+    vehicleName:typeof saved?.vehicleName === 'string' ? saved.vehicleName.trim().slice(0,40) : '',
+    fuel:['gas','diesel','lpg','hybrid','ev','other'].includes(saved?.fuel) ? saved.fuel : '',
+    signalAlert:saved?.signalAlert !== false,
+    arrivalAlert:saved?.arrivalAlert !== false
+  };
+}
+
+function applyTheme() {
+  const root = document.documentElement;
+  root.dataset.theme = settings.theme;
+  document.querySelector('meta[name="theme-color"]').content =
+    getComputedStyle(root).getPropertyValue('--background').trim();
+}
+
+function saveSettings(change) {
+  Object.assign(settings,change);
+  const status = el('settingsStatus');
+  try {
+    window.localStorage.setItem(settingsKey,JSON.stringify(settings));
+    status.textContent = '';
+  } catch {
+    status.textContent = '이 브라우저에 설정을 저장하지 못했어요. 현재 화면에서는 적용돼요.';
+  }
+}
+
 const navigationScreen = document.createElement('section');
 navigationScreen.className = 'navigation-screen';
+navigationScreen.classList.toggle('signal-alert-off',!settings.signalAlert);
 navigationScreen.setAttribute('aria-label','주행 모드');
 navigationScreen.hidden = true;
 navigationScreen.innerHTML = `
@@ -121,10 +163,11 @@ const closePanel = ()=>setPanel(null);
 const liveSignal = initNextSignal({map,card:signalCard});
 const nextSignal = {
   ...liveSignal,
-  start(owner,route) {return liveSignal.start(owner,route,navigationCards);}
+  start(owner,route) {return settings.signalAlert ? liveSignal.start(owner,route,navigationCards) : 0;}
 };
 const guide = initNavigationGuide({
-  card:el('navigationGuide'),speak:text=>el('voiceEnabled').checked && say(text),
+  card:el('navigationGuide'),
+  speak:text=>settings.voice && (settings.arrivalAlert || text !== '목적지에 도착했습니다.') && say(text),
   searchParking:(destination,button)=>navigationParking.open(destination,button)
 });
 const navigation = {
@@ -160,6 +203,18 @@ const routing = initRouting({
     simulation.setRoadRoute(route);
   }
 });
+const routeOptions = el('routeOptions');
+let firstComparedOption;
+new MutationObserver(()=>{
+  // Apply the preference when comparison results arrive, leaving later manual choices alone.
+  if (routeOptions.firstElementChild === firstComparedOption) return;
+  firstComparedOption = routeOptions.firstElementChild;
+  if (!firstComparedOption) return;
+  const preferredLabel = [...el('settingsRoute').options].find(option=>option.value === settings.route)?.textContent;
+  const preferred = [...routeOptions.children].find(button=>!button.disabled &&
+    button.querySelector('.route-option-name')?.textContent === preferredLabel);
+  if (preferred?.getAttribute('aria-pressed') === 'false') preferred.click();
+}).observe(routeOptions,{childList:true});
 const placeSearch = initPlaceSearch({
   map,
   chooseRoutePlace:routing.chooseMapPlace,
@@ -174,15 +229,8 @@ navigationExit.onclick = ()=>{
 
 for (const button of buttons) {
   button.setAttribute('aria-label',button.title);
-  button.onclick = ()=>setPanel(button.dataset.panel);
+  button.onclick = ()=>openPanel(button.dataset.panel);
 }
-railToggle.onclick = ()=>{
-  const expanded = workspace.classList.toggle('rail-expanded');
-  railToggle.setAttribute('aria-expanded',String(expanded));
-  railToggle.setAttribute('aria-label',expanded ? '사이드바 접기' : '사이드바 펼치기');
-  railToggle.title = expanded ? '사이드바 접기' : '사이드바 펼치기';
-  map.redraw();
-};
 el('closePanel').onclick = closePanel;
 document.addEventListener('keydown',event=>{
   if (event.key !== 'Escape' || event.defaultPrevented) return;
@@ -204,9 +252,48 @@ const speech = window.speechSynthesis;
 const mic = el('mic');
 const voiceEnabled = el('voiceEnabled');
 const voiceVolume = el('voiceVolume');
+voiceEnabled.checked = settings.voice;
+voiceVolume.value = String(settings.volume);
+el('voiceVolumeValue').value = settings.volume+'%';
+
+const theme = el('settingsTheme');
+theme.value = settings.theme;
+theme.onchange = ()=>{
+  saveSettings({theme:theme.value});
+  applyTheme();
+  map.refreshTheme();
+};
+
+const mapType = el('settingsMapType');
+const routePreference = el('settingsRoute');
+const vehicleName = el('settingsVehicleName');
+const fuel = el('settingsFuel');
+const signalAlert = el('settingsSignalAlert');
+const arrivalAlert = el('settingsArrivalAlert');
+mapType.value = settings.mapType;
+routePreference.value = settings.route;
+vehicleName.value = settings.vehicleName;
+fuel.value = settings.fuel;
+signalAlert.checked = settings.signalAlert;
+arrivalAlert.checked = settings.arrivalAlert;
+mapType.onchange = ()=>{
+  saveSettings({mapType:mapType.value});
+  map.setMapType(settings.mapType);
+};
+routePreference.onchange = ()=>saveSettings({route:routePreference.value});
+vehicleName.onchange = ()=>{
+  vehicleName.value = vehicleName.value.trim().slice(0,40);
+  saveSettings({vehicleName:vehicleName.value});
+};
+fuel.onchange = ()=>saveSettings({fuel:fuel.value});
+signalAlert.onchange = ()=>{
+  saveSettings({signalAlert:signalAlert.checked});
+  navigationScreen.classList.toggle('signal-alert-off',!settings.signalAlert);
+};
+arrivalAlert.onchange = ()=>saveSettings({arrivalAlert:arrivalAlert.checked});
+
 let utterance;
-function say(text) {
-  const status = el('voiceStatus');
+function say(text, status = el('voiceStatus')) {
   status.textContent = text;
   if (!speech || !window.SpeechSynthesisUtterance) {
     status.textContent = '이 브라우저에서는 음성 재생을 사용할 수 없어요.';
@@ -214,7 +301,7 @@ function say(text) {
   }
   const voice = new SpeechSynthesisUtterance(text);
   voice.lang = 'ko-KR';
-  voice.volume = Number(voiceVolume.value) / 100;
+  voice.volume = settings.volume / 100;
   utterance = voice;
   voice.onerror = ()=>{
     if (utterance === voice) status.textContent = '음성을 재생할 수 없어요. 기기 음성 설정을 확인해 주세요.';
@@ -224,24 +311,29 @@ function say(text) {
   return true;
 }
 voiceEnabled.onchange = ()=>{
-  if (!voiceEnabled.checked) {
+  saveSettings({voice:voiceEnabled.checked});
+  if (!settings.voice) {
     utterance = null;
     speech?.cancel();
   }
-  el('voiceStatus').textContent = voiceEnabled.checked ? '주행 음성 안내 켜짐' : '주행 음성 안내 꺼짐';
+  el('settingsVoiceStatus').textContent = settings.voice ? '주행 음성 안내 켜짐' : '주행 음성 안내 꺼짐';
   syncNavigationVoice();
 };
 function syncNavigationVoice() {
   navigationVoice.setAttribute('aria-label','주행 음성 안내');
-  navigationVoice.setAttribute('aria-pressed',String(voiceEnabled.checked));
-  navigationVoice.textContent = voiceEnabled.checked ? '음성 켜짐' : '음성 꺼짐';
+  navigationVoice.setAttribute('aria-pressed',String(settings.voice));
+  navigationVoice.textContent = settings.voice ? '음성 켜짐' : '음성 꺼짐';
 }
 navigationVoice.onclick = ()=>{
   voiceEnabled.checked = !voiceEnabled.checked;
   voiceEnabled.onchange();
 };
-voiceVolume.oninput = ()=>{el('voiceVolumeValue').value = voiceVolume.value+'%';};
-el('voicePreview').onclick = ()=>say('삼백 미터 앞에서 좌회전하세요.');
+voiceVolume.oninput = ()=>{
+  settings.volume = Number(voiceVolume.value);
+  el('voiceVolumeValue').value = settings.volume+'%';
+};
+voiceVolume.onchange = ()=>saveSettings({volume:Number(voiceVolume.value)});
+el('voicePreview').onclick = ()=>say('삼백 미터 앞에서 좌회전하세요.',el('settingsVoiceStatus'));
 function readRoute() {
   say(routing.routeSummary() || '경로 패널에서 출발지와 도착지를 선택하고 경로를 조회해 주세요.');
 }

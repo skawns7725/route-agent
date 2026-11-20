@@ -1,5 +1,4 @@
 const center = {lat:36.348,lng:127.397};
-const routeColor = '#2563eb';
 const zoomSpeeds = [30, 60, 90];
 
 function courseBetween(from, to, minimumMeters) {
@@ -70,24 +69,24 @@ function offlineMap(canvas, preview) {
     ctx.stroke();
     ctx.setLineDash([]);
   }
-  function pin(location, color, text, radius, offset = 0) {
+  function pin(location, color, text, radius, {ground, label}, offset = 0) {
     const [x,projectedY] = point(location.lng,location.lat);
     const y = projectedY + offset;
     ctx.beginPath();
     ctx.arc(x,y,radius,0,Math.PI*2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = ground;
     ctx.lineWidth = 2;
     ctx.stroke();
     if (!text) return;
     ctx.font = '700 13px "Malgun Gothic", sans-serif';
     ctx.textAlign = width < 440 && x > width - 75 ? 'right' : 'left';
-    ctx.strokeStyle = '#fffffff5';
+    ctx.strokeStyle = ground;
     ctx.lineWidth = 4;
     const anchor = x + (ctx.textAlign === 'right' ? -11 : 11);
     ctx.strokeText(text,anchor,y-10);
-    ctx.fillStyle = '#263f35';
+    ctx.fillStyle = label;
     ctx.fillText(text,anchor,y-10);
   }
   function render() {
@@ -105,53 +104,61 @@ function offlineMap(canvas, preview) {
     }
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.lineJoin = ctx.lineCap = 'round';
-    ctx.fillStyle = '#e8ede4';
+    const style = getComputedStyle(canvas);
+    const color = token=>style.getPropertyValue('--'+token).trim();
+    const ground = color('map-ground');
+    const road = color('map-road');
+    const roadEdge = color('map-road-edge');
+    const label = color('map-label');
+    const pinPalette = {ground,label};
+    ctx.fillStyle = ground;
     ctx.fillRect(0,0,width,height);
     for (const [i,park] of parks.entries()) {
       begin(park);
       ctx.closePath();
-      ctx.fillStyle = i % 2 ? '#d0e3c9' : '#d9e8d2';
+      ctx.fillStyle = i % 2 ? color('map-park-alt') : color('map-park');
       ctx.fill();
     }
     // Offset the two sets of local streets to give the schematic neighborhood blocks.
     for (let i=0;i<47;i++) {
       const x = 127.255+i*.006;
       const shift = Math.sin(i*1.7)*.005;
-      stroke([[x-.01,36.54],[x-.009,36.438],[x+shift,36.388],[x,36.355],[x+shift,36.327],[x+.01,36.273],[x+.007,36.16]], '#f9fbf6', i%4===0?2.8:1.35);
+      stroke([[x-.01,36.54],[x-.009,36.438],[x+shift,36.388],[x,36.355],[x+shift,36.327],[x+.01,36.273],[x+.007,36.16]], road, i%4===0?2.8:1.35);
     }
     for (let i=-22;i<55;i++) {
       const y = 36.276+i*.005;
       const [,screenY] = point(center.lng,y);
       if (screenY < -70 || screenY > height+70) continue;
       const shift = Math.sin(i*1.4)*.005;
-      stroke([[127.251,y-.008],[127.338,y],[127.378,y+shift],[127.442,y],[127.505,y+shift],[127.546,y+.005]], '#fbfcf9', i%4===0?2.8:1.35);
+      stroke([[127.251,y-.008],[127.338,y],[127.378,y+shift],[127.442,y],[127.505,y+shift],[127.546,y+.005]], road, i%4===0?2.8:1.35);
     }
-    stroke(river,'#d4e6dd',18);
-    stroke(river,'#b3d6db',10);
+    stroke(river,color('map-water-edge'),18);
+    stroke(river,color('map-water'),10);
+    const highway = color('map-highway');
     arterialRoads.forEach((road,i)=>{
-      stroke(road,'#d4d9c1',i===7?7:5);
-      stroke(road,i===7?'#faf1d8':'#fffefa',i===7?5:3.4);
+      stroke(road,roadEdge,i===7?7:5);
+      stroke(road,i===7?highway:road,i===7?5:3.4);
     });
     for (const [name,lng,lat] of labels) {
       const [x,y] = point(lng,lat);
       ctx.textAlign = 'center';
       ctx.font = name === '대전광역시' ? '700 18px "Malgun Gothic", sans-serif' : '600 12px "Malgun Gothic", sans-serif';
-      ctx.strokeStyle = '#eff4ec';
+      ctx.strokeStyle = ground;
       ctx.lineWidth = 3;
       ctx.strokeText(name,x,y);
-      ctx.fillStyle = '#586d61';
+      ctx.fillStyle = label;
       ctx.fillText(name,x,y);
     }
     const route = snapshot?.points || preview;
     if (!route.length) return;
     const geometry = route.map(p=>[p.lng,p.lat]);
-    stroke(geometry,'#fff',8);
-    stroke(geometry,routeColor,snapshot?5:3.5,snapshot?[]:[5,6]);
-    pin(route[0],'#294d43','용운동',5);
-    pin(route.at(-1),'#247b68','충남대',5);
+    stroke(geometry,ground,8);
+    stroke(geometry,color('primary'),snapshot?5:3.5,snapshot?[]:[5,6]);
+    pin(route[0],'#294d43','용운동',5,pinPalette);
+    pin(route.at(-1),'#247b68','충남대',5,pinPalette);
     if (!snapshot) return;
-    for (const stop of snapshot.stops) pin(stop,stop.state==='red'?'#b52d34':'#237a58','',5,-12);
-    if (snapshot.position && !camera) pin(snapshot.position,'#334fd0','모의 차량',8);
+    for (const stop of snapshot.stops) pin(stop,stop.state==='red'?'#b52d34':'#237a58','',5,pinPalette,-12);
+    if (snapshot.position && !camera) pin(snapshot.position,color('accent'),'모의 차량',8,pinPalette);
   }
   function redraw() {
     if (!frame) frame = requestAnimationFrame(render);
@@ -179,7 +186,7 @@ function offlineMap(canvas, preview) {
   };
 }
 
-export function createMap(preview) {
+export function createMap(preview,{mapType = 'road',traffic = false,onTrafficChange} = {}) {
   const canvas = document.getElementById('exampleMap');
   const live = document.getElementById('atlasMap');
   const credit = document.getElementById('mapCredit');
@@ -197,7 +204,7 @@ export function createMap(preview) {
   let routeLine, routeMarkers = [], observedMarker, gpsMarker, simulatedMarker, nextSignalMarker;
   let placeMarkers = [];
   let followingGps = false;
-  let trafficEnabled = false;
+  let trafficEnabled = traffic;
   let navigationOwner = null, navigationPoint, bearingPoint, heading, exploreCamera;
   let navigationSpeed = null, navigationLevel = 3;
   let vehicle, sdkCredit, sdkCreditAnchor;
@@ -243,12 +250,13 @@ export function createMap(preview) {
   function line(points, options) {
     return new sdk.Polyline({map:instance,path:points.map(latLng),strokeOpacity:.95,...options});
   }
+  const routeColor = ()=>getComputedStyle(workspace).getPropertyValue('--primary').trim();
   function redrawRoute() {
     if (!instance) return;
     routeLine?.setMap(null);
     routeMarkers.forEach(marker=>marker.setMap(null));
     routeMarkers = (route?.markers || []).map(marker=>new sdk.Marker({map:instance,position:latLng(marker),title:marker.label}));
-    routeLine = route?.points.length > 1 ? line(route.points,{strokeColor:routeColor,strokeWeight:6}) : null;
+    routeLine = route?.points.length > 1 ? line(route.points,{strokeColor:routeColor(),strokeWeight:6}) : null;
   }
   function redrawObservation() {
     if (!instance) return;
@@ -329,17 +337,26 @@ export function createMap(preview) {
     if (liveMode) instance.setLevel(Math.max(1,Math.min(14,instance.getLevel()-delta)));
     else offline.zoom(delta);
   }
+  function setMapType(type) {
+    mapType = type;
+    const id = sdk?.MapTypeId?.[type === 'hybrid' ? 'HYBRID' : 'ROADMAP'];
+    if (id != null) instance.setMapTypeId(id);
+  }
   document.getElementById('zoomIn').onclick = ()=>zoom(1);
   document.getElementById('zoomOut').onclick = ()=>zoom(-1);
   switchButton.onclick = ()=>chooseMode('live');
-  if (trafficButton) trafficButton.onclick = ()=>{
-    if (trafficButton.disabled) return;
-    const traffic = sdk.MapTypeId.TRAFFIC;
-    if (trafficEnabled) instance.removeOverlayMapTypeId(traffic);
-    else instance.addOverlayMapTypeId(traffic);
-    trafficEnabled = !trafficEnabled;
+  if (trafficButton) {
     trafficButton.setAttribute('aria-pressed',String(trafficEnabled));
-  };
+    trafficButton.onclick = ()=>{
+      if (trafficButton.disabled) return;
+      const id = sdk.MapTypeId.TRAFFIC;
+      trafficEnabled = !trafficEnabled;
+      if (trafficEnabled) instance.addOverlayMapTypeId(id);
+      else instance.removeOverlayMapTypeId(id);
+      trafficButton.setAttribute('aria-pressed',String(trafficEnabled));
+      onTrafficChange?.(trafficEnabled);
+    };
+  }
   chooseMode('pending');
 
   function setConnectionStatus(message, retryable = false) {
@@ -375,6 +392,8 @@ export function createMap(preview) {
       });
       sdk = window.kakao.maps;
       instance = new sdk.Map(live,{center:new sdk.LatLng(37.564,126.978),level:8});
+      setMapType(mapType);
+      if (trafficEnabled && sdk.MapTypeId?.TRAFFIC != null) instance.addOverlayMapTypeId(sdk.MapTypeId.TRAFFIC);
       // Keep the SDK's real attribution upright outside the transformed map.
       const logo = live.querySelector?.('img[alt^="Kakao"][src*="/mapjsapi/images/"]');
       sdkCredit = logo?.closest('a')?.parentElement?.parentElement;
@@ -399,7 +418,12 @@ export function createMap(preview) {
     connected:()=>Boolean(instance),
     onReady(listener){if (instance) listener({sdk,instance}); else listeners.push(listener);},
     redraw:offline.redraw,
+    refreshTheme() {
+      offline.redraw();
+      routeLine?.setOptions({strokeColor:routeColor()});
+    },
     setNavigationMode,
+    setMapType,
     setNavigationSpeed(speed){navigationSpeed=speed;},
     setRoute(value){route=value;redrawRoute();},
     setObservedPoint(value){observation=value;redrawObservation();},
