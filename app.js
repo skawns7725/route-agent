@@ -72,6 +72,16 @@ navigationScreen.setAttribute('aria-label','주행 모드');
 navigationScreen.hidden = true;
 navigationScreen.innerHTML = `
   <div class="navigation-cards" data-navigation-cards>
+    <div class="navigation-speedometer">
+      <div class="navigation-speed-limit" aria-label="제한속도">
+        <strong data-navigation-limit>—</strong>
+        <span data-navigation-limit-label>제한속도 정보 없음</span>
+      </div>
+      <div class="navigation-speed-reading">
+        <span data-navigation-source></span>
+        <strong data-navigation-speed>—</strong> <span class="navigation-speed-unit">km/h</span>
+      </div>
+    </div>
     <p id="departureNotice" class="departure-notice" role="status" hidden></p>
     <p class="navigation-no-signal">전방 교차로 · 실제 신호 <strong>정보 없음</strong></p>
   </div>
@@ -84,7 +94,9 @@ navigationScreen.innerHTML = `
     <ul></ul>
   </section>
   <div class="navigation-controls">
-    <div><span data-navigation-source></span><strong data-navigation-speed>—</strong></div>
+    <p class="navigation-trip" aria-label="남은 주행 요약" hidden>
+      <strong data-guide-stats></strong><span data-guide-eta-row hidden> · <time></time> 도착</span>
+    </p>
     <button type="button" data-navigation-voice aria-pressed="false">음성 꺼짐</button>
     <button type="button" data-navigation-exit>주행 종료</button>
   </div>`;
@@ -92,6 +104,8 @@ workspace.append(navigationScreen);
 const navigationCards = navigationScreen.querySelector('[data-navigation-cards]');
 const navigationSource = navigationScreen.querySelector('[data-navigation-source]');
 const navigationSpeed = navigationScreen.querySelector('[data-navigation-speed]');
+const navigationLimit = navigationScreen.querySelector('[data-navigation-limit]');
+const navigationLimitLabel = navigationScreen.querySelector('[data-navigation-limit-label]');
 const navigationVoice = navigationScreen.querySelector('[data-navigation-voice]');
 const navigationExit = navigationScreen.querySelector('[data-navigation-exit]');
 const navigationParking = initNavigationParking({sheet:navigationScreen.querySelector('.navigation-parking')});
@@ -102,7 +116,7 @@ unavailableSignal.textContent = '정보 없음';
 signalCard.querySelector('ul').after(unavailableSignal);
 
 function showSpeed(speed) {
-  const label = Number.isFinite(speed) && speed >= 0 ? Math.round(speed * 3.6)+' km/h' : '—';
+  const label = Number.isFinite(speed) && speed >= 0 ? String(Math.round(speed * 3.6)) : '—';
   if (navigationSpeed.textContent !== label) navigationSpeed.textContent = label;
   map.setNavigationSpeed(speed);
 }
@@ -170,6 +184,7 @@ const nextSignal = {
 };
 const guide = initNavigationGuide({
   card:el('navigationGuide'),
+  trip:navigationScreen.querySelector('.navigation-trip'),
   speak:text=>settings.voice && (settings.arrivalAlert || text !== '목적지에 도착했습니다.') && say(text),
   searchParking:(destination,button)=>navigationParking.open(destination,button)
 });
@@ -177,6 +192,9 @@ const navigation = {
   ...guide,
   start(owner,route) {
     if (owner === 'simulation') simulationDrive = route;
+    const exampleLimit = owner === 'simulation' ? route.exampleSpeedLimit : null;
+    navigationLimit.textContent = exampleLimit ?? '—';
+    navigationLimitLabel.textContent = exampleLimit ? '예시 제한속도' : '제한속도 정보 없음';
     guide.start(owner,route,navigationCards);
   },
   update(owner,progress,options = {}) {

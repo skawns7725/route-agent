@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {buildNavigationPlan, readNavigation} from './navigation-guide.mjs';
+import {buildNavigationPlan, directionArrow, readNavigation} from './navigation-guide.mjs';
 
 const points = [{lat:37,lng:127},{lat:37.002,lng:127},{lat:37.004,lng:127}];
 const route = {points,distanceMeters:440,durationSeconds:120,sections:[{
@@ -47,4 +47,13 @@ test('counts a waypoint once when Kakao repeats it at a section boundary',()=>{
   assert.equal(readNavigation(plan,.45).passedWaypoints,0);
   assert.equal(readNavigation(plan,.6).passedWaypoints,1);
   assert.equal(readNavigation(plan,.6).step.text,'우회전');
+});
+
+test('uses the next instruction for the direction arrow and omits unknown directions',()=>{
+  assert.equal(directionArrow('유턴 IC 방향'),'↶');
+  assert.equal(directionArrow('왼쪽 방향'),'↰');
+  assert.equal(directionArrow('우회전'),'↱');
+  assert.equal(directionArrow('직진'),'↑');
+  assert.equal(directionArrow('목적지 도착'),'');
+  assert.equal(directionArrow(''),'');
 });

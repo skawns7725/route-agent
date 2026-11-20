@@ -179,12 +179,14 @@
 
     <section id="navigationGuide" class="navigation-guide" aria-label="주행 방향 안내" hidden>
       <div class="navigation-guide-row">
-        <strong role="status" aria-atomic="true"></strong>
         <b data-guide-distance></b>
+        <strong role="status" aria-atomic="true"></strong>
       </div>
       <p data-guide-road></p>
-      <p data-guide-stats></p>
-      <p data-guide-eta-row hidden>도착 예정 <time data-guide-eta></time></p>
+      <div class="navigation-direction" data-guide-direction hidden>
+        <span data-guide-arrow aria-hidden="true"></span>
+        <span>경로 방향 · 차로 정보 없음</span>
+      </div>
       <p data-guide-branches></p>
       <button data-guide-parking class="secondary" type="button" hidden>도착지 주변 주차장</button>
       <details data-guide-list hidden><summary>전체 방향 안내</summary><ol></ol></details>
