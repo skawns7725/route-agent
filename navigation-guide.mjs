@@ -117,10 +117,12 @@ export function initNavigationGuide({card,speak,searchParking}) {
       }));
     },
     stop,
+    currentInstruction() {return session?.instruction || '';},
     passedWaypoints(owner) {return session?.owner === owner ? session.passedWaypoints : 0;},
     update(owner,progress,{seconds,arrived = false,announce = false,elapsed,distanceTraveled,estimatedAt = Date.now()} = {}) {
       if (session?.owner !== owner) return;
       if (progress === null) {
+        session.instruction = '';
         text(turn,'경로 위 현재 위치를 확인하고 있어요.');
         for (const node of [distance,road,stats,branches]) text(node,'');
         showArrivalTime(null);
@@ -130,6 +132,7 @@ export function initNavigationGuide({card,speak,searchParking}) {
       const state = readNavigation(session.plan,session.progress,seconds,estimatedAt);
       session.passedWaypoints = state.passedWaypoints;
       const {step,stepDistance} = state;
+      session.instruction = arrived || !step ? '' : metersText(stepDistance)+' 앞 '+step.text+(step.road ? ', '+step.road : '');
       const index = step && !arrived ? state.index : -1;
       if (index !== session.highlight) {
         steps.children[session.highlight]?.removeAttribute('aria-current');
@@ -154,7 +157,7 @@ export function initNavigationGuide({card,speak,searchParking}) {
       showArrivalTime(state.arrivalAt);
       if (announce && step && stepDistance <= (step.type === arrival ? 500 : 300) &&
           session.lastAnnouncement !== state.index &&
-          speak(metersText(stepDistance)+' 앞 '+step.text+(step.road ? ', '+step.road : ''))) {
+          speak(session.instruction)) {
         session.lastAnnouncement = state.index;
         if (step.type === arrival) session.nearAnnounced = true;
       } else if (announce && (!step || stepDistance > 300) && session.destination && state.remaining <= 500 && !session.nearAnnounced &&

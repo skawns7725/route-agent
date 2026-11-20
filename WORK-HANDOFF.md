@@ -1,5 +1,12 @@
 Last-Author: Codex
 
+## 2026-11-20 Gemini 음성 명령
+
+- `codex/driving-fixes`의 `047eab0`에서 `codex/voice-command-gemini`를 분기했다. `POST /api/voice-command`는 서버의 `GEMINI_API_KEY`를 사용해 Gemini v1beta의 `gemini-3.8-flash`로 분류하고 `action`, `place`, `message`만 반환한다. 교차 출처·빈 명령·키 미설정·한도 초과를 별도로 처리한다. README에 Google AI Studio 키 발급 및 실행 환경 설정을 기록했다.
+- 텍스트와 마이크 입력이 같은 명령 흐름을 사용한다. 위치 지정은 카카오 장소 조회와 기존 경로 폼을 사용하고, 실패하거나 한도를 초과하면 기존 키워드 경로 읽기로 돌아간다. Gemini 문맥에는 이름과 경로 상태를 보내며 GPS 좌표와 저장 주소는 넣지 않는다.
+- 주행 중에는 다음 안내 반복과 종료, GPS 기준 교통 반영 재탐색을 지원한다. 목적지·경유지 변경은 장소를 찾은 뒤 주행을 종료하고 경로 설정으로 돌아간다. 모의 주행 중 정체 경로 재탐색은 주행 종료 후 경로 화면에서 요청하도록 안내한다.
+- `node --test` 41개 통과. Node DOM의 테스트 응답으로 목적지·경유지 지정, 정체 경로 재조회, 안내 반복·종료, 429 시 키워드 폴백을 확인했다. 실제 Gemini 응답, 브라우저 마이크·음성은 미검증이다.
+
 ## 2026-11-20 주행 중 주차장과 도착 예정 시각 수정
 
 - `codex/navigation-perspective`의 `b37d53b`에서 `codex/driving-fixes`를 분기했다. `serve.cjs`의 `/api/parking`은 같은 이름과 주소 또는 같은 좌표를 가진 결과를 한 곳으로 합치고, 카카오 거리순 결과에서 처음 나온 항목을 표시한다.

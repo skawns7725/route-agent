@@ -13,6 +13,28 @@
 
 회귀 테스트는 `node --test`로 실행한다.
 
+## Gemini 음성 명령
+
+1. [Google AI Studio의 API 키 화면](https://aistudio.google.com/apikey)에 로그인하고 **Create API key**를 선택한다. 무료 등급으로 사용하려면 무료 프로젝트를 선택하고 결제를 연결하지 않는다. 모델별 무료 한도와 정책은 [Gemini API 가격 안내](https://aistudio.google.com/docs/pricing#gemini-3.8-flash)에서 확인한다.
+2. 서버를 실행할 터미널에서 키를 `GEMINI_API_KEY` 환경변수로 설정한다. Codespaces에서는 저장소에 접근 가능한 Codespaces secret으로 같은 이름을 설정하고 Codespace와 Node 서버를 다시 시작한다.
+
+PowerShell 7
+
+```powershell
+$env:GEMINI_API_KEY = Read-Host -Prompt 'Gemini API 키' -MaskInput
+node serve.cjs
+```
+
+Bash
+
+```bash
+read -rsp 'Gemini API 키: ' GEMINI_API_KEY
+export GEMINI_API_KEY
+node serve.cjs
+```
+
+서버의 `POST /api/voice-command`는 `gemini-3.8-flash`로 텍스트 명령을 분류한다. 명령을 보낼 때 입력한 문장과 경로 상태, 출발지·도착지·경유지·저장 장소의 이름을 Google로 전송한다. GPS 좌표와 저장된 주소는 문맥 데이터에 포함하지 않는다. 키가 없거나 API 호출에 실패하면 앱은 기존 키워드 방식으로 경로 요약을 읽을 수 있다.
+
 ## 개발 도구 시작점
 
 - Codex는 `AGENTS.md`를 따른다.

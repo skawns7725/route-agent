@@ -4,7 +4,8 @@ import {initSignals} from './signals.js';
 import {exampleRoute, initSimulation} from './simulation.js';
 import {initDriving} from './driving.mjs';
 import {initNextSignal} from './next-signal.mjs';
-import {initNavigationParking, initPlaceSearch} from './place-search.mjs';
+import {createPlaceLookup, initNavigationParking, initPlaceSearch} from './place-search.mjs';
+import {readSavedPlaces} from './saved-places.mjs';
 import {initNavigationGuide} from './navigation-guide.mjs';
 
 const el = id=>document.getElementById(id);
@@ -43,13 +44,19 @@ navigationScreen.innerHTML = `
   <div class="navigation-controls">
     <div><span data-navigation-source></span><strong data-navigation-speed>—</strong></div>
     <button type="button" data-navigation-voice aria-pressed="false">음성 꺼짐</button>
+    <button type="button" data-navigation-command aria-label="Gemini 음성 명령" aria-pressed="false">음성 명령</button>
     <button type="button" data-navigation-exit>주행 종료</button>
+    <span data-navigation-voice-status role="status" hidden></span>
   </div>`;
 workspace.append(navigationScreen);
 const navigationCards = navigationScreen.querySelector('[data-navigation-cards]');
 const navigationSource = navigationScreen.querySelector('[data-navigation-source]');
 const navigationSpeed = navigationScreen.querySelector('[data-navigation-speed]');
 const navigationVoice = navigationScreen.querySelector('[data-navigation-voice]');
+const navigationCommand = navigationScreen.querySelector('[data-navigation-command]');
+const navigationVoiceStatus = navigationScreen.querySelector('[data-navigation-voice-status]');
+navigationCommand.parentElement.style.gridTemplateColumns = 'minmax(0,1fr) auto auto auto';
+navigationVoiceStatus.style.gridColumn = '1 / -1';
 const navigationExit = navigationScreen.querySelector('[data-navigation-exit]');
 const navigationParking = initNavigationParking({sheet:navigationScreen.querySelector('.navigation-parking')});
 const signalCard = el('nextSignal');
@@ -81,6 +88,8 @@ function setNavigationMode(owner) {
     syncNavigationVoice();
     navigationExit.focus({preventScroll:true});
   } else {
+    microphone?.abort();
+    navigationVoiceStatus.hidden = true;
     navigationParking.close(false);
     setPanel(explorationPanel,false);
     queueMicrotask(()=>{
@@ -124,7 +133,7 @@ const nextSignal = {
   start(owner,route) {return liveSignal.start(owner,route,navigationCards);}
 };
 const guide = initNavigationGuide({
-  card:el('navigationGuide'),speak:text=>el('voiceEnabled').checked && say(text),
+  card:el('navigationGuide'),speak:text=>el('voiceEnabled').checked && say(text,el('voiceStatus')),
   searchParking:(destination,button)=>navigationParking.open(destination,button)
 });
 const navigation = {
@@ -167,9 +176,13 @@ const placeSearch = initPlaceSearch({
 });
 const loadSignals = initSignals({map,closePanel});
 el('routeDrive').textContent = el('routeSummaryDrive').textContent = '주행 시작';
-navigationExit.onclick = ()=>{
+function stopGuidance() {
   if (navigationOwner === 'simulation') simulation.stop();
   else if (navigationOwner === 'gps') driving.stop();
+}
+navigationExit.onclick = ()=>{
+  voiceCommandRequest?.abort();
+  stopGuidance();
 };
 
 for (const button of buttons) {
@@ -205,9 +218,8 @@ const mic = el('mic');
 const voiceEnabled = el('voiceEnabled');
 const voiceVolume = el('voiceVolume');
 let utterance;
-function say(text) {
-  const status = el('voiceStatus');
-  status.textContent = text;
+function say(text, status = showVoiceStatus(text)) {
+  if (status.textContent !== text) status.textContent = text;
   if (!speech || !window.SpeechSynthesisUtterance) {
     status.textContent = '이 브라우저에서는 음성 재생을 사용할 수 없어요.';
     return false;
@@ -245,11 +257,175 @@ el('voicePreview').onclick = ()=>say('삼백 미터 앞에서 좌회전하세요
 function readRoute() {
   say(routing.routeSummary() || '경로 패널에서 출발지와 도착지를 선택하고 경로를 조회해 주세요.');
 }
-function command(raw) {
-  const text = raw.trim();
+function showVoiceStatus(text) {
+  const status = navigationOwner ? navigationVoiceStatus : el('voiceStatus');
+  status.textContent = text;
+  status.hidden = false;
+  return status;
+}
+
+function savedPlaceBook() {
+  try { return readSavedPlaces(window.localStorage); }
+  catch { return readSavedPlaces(); }
+}
+
+function voiceContext(book) {
+  return {
+    origin:el('route-start').querySelector('input').value,
+    destination:el('route-end').querySelector('input').value,
+    routeState:navigationOwner || (routing.routeSummary() ? 'ready' : 'editing'),
+    waypoints:[...el('route-via').querySelectorAll('input')].map(input=>input.value),
+    savedPlaces:{home:book.home?.name,work:book.work?.name,
+      favorites:book.favorites.map(place=>place.name),recent:book.recent.map(place=>place.name)}
+  };
+}
+
+const lookupVoicePlace = createPlaceLookup();
+let voiceCommandRequest;
+
+function waitForRouteUi(node,read,start,signal) {
+  return new Promise(resolve=>{
+    if (signal.aborted) {resolve(undefined);return;}
+    const observer = new MutationObserver(()=>{
+      const result = read();
+      if (result !== undefined) finish(result);
+    });
+    const timeout = setTimeout(()=>finish(),13000);
+    const abort = ()=>finish();
+    function finish(result) {
+      clearTimeout(timeout);
+      observer.disconnect();
+      signal.removeEventListener('abort',abort);
+      resolve(result);
+    }
+    signal.addEventListener('abort',abort,{once:true});
+    observer.observe(node,{childList:true,subtree:true});
+    try { start(); } catch { finish(); }
+  });
+}
+
+async function chooseVoiceWaypoint(place,signal) {
+  el('routeVia').click();
+  const row = el('route-via').lastElementChild;
+  const input = row.querySelector('input');
+  const results = row.querySelector('.route-place-results');
+  const label = place.address && place.name !== place.address ? place.name+' · '+place.address : place.name;
+  input.value = place.name;
+  const button = await waitForRouteUi(results,()=>{
+    const choices = [...results.querySelectorAll('.route-place-option')];
+    if (choices.length) {
+      const matches = choices.filter(option=>option.textContent === label);
+      return matches.length === 1 ? matches[0] : null;
+    }
+    return /검색 결과가 없어요|가져오지 못했어요/.test(results.textContent) ? null : undefined;
+  },()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true})),signal);
+  if (signal.aborted) return;
+  if (button?.isConnected && input.value === place.name) {
+    button.click();
+    say(place.name+'을 경유지로 추가했어요. 경로를 다시 비교해 주세요.');
+  } else say('경유지를 확정하지 못했어요. 경로 화면에서 검색 결과를 선택해 주세요.');
+}
+
+async function applyVoicePlace(action,name,book,signal) {
+  const waypoint = action === 'add_waypoint';
+  if (waypoint && el('routeVia').disabled) return say('경유지는 최대 다섯 곳까지 추가할 수 있어요.');
+  if (!map.connected()) return say('카카오 지도가 연결되면 장소를 지정할 수 있어요.');
+  let place = name === '집' ? book.home : name === '회사' ? book.work : null;
+  if (!place && (name === '집' || name === '회사')) return say('저장한 '+name+' 장소가 없어요. 경로 화면에서 먼저 저장해 주세요.');
+  if (!place) {
+    try {
+      const places = await lookupVoicePlace(name);
+      if (signal.aborted) return;
+      const exact = places.filter(item=>item.name === name || item.address === name);
+      place = exact.length === 1 ? exact[0] : places.length === 1 ? places[0] : null;
+      if (!place) return say(places.length ? '같은 이름의 장소가 여럿 있어요. 지역이나 주소도 말해 주세요.'
+        : '장소를 찾지 못했어요. 이름이나 주소를 다시 말해 주세요.');
+    } catch {
+      if (!signal.aborted) say('장소를 가져오지 못했어요. 다시 시도해 주세요.');
+      return;
+    }
+  }
+  if (signal.aborted) return;
+  if (waypoint && el('routeVia').disabled) return say('경유지는 최대 다섯 곳까지 추가할 수 있어요.');
+  if (navigationOwner) stopGuidance();
+  openPanel('route');
+  if (waypoint) return chooseVoiceWaypoint(place,signal);
+  routing.chooseMapPlace('end',place);
+  say(place.name+'을 도착지로 설정했어요. 경로를 다시 비교해 주세요.');
+}
+
+async function avoidTraffic(signal) {
+  if (navigationOwner === 'gps' && driving.isActive()) {
+    const button = el('driveReroute');
+    if (button.disabled) return say('현재 위치가 확인되면 교통 반영 경로를 다시 요청해 주세요.');
+    await button.onclick();
+    if (!signal.aborted && navigationOwner === 'gps') say(el('driveStatus').textContent);
+    return;
+  }
+  if (navigationOwner) return say('모의 주행을 종료하고 경로 화면에서 정체가 적은 길을 다시 찾을 수 있어요.');
+  if (!routing.routeSummary()) return say('출발지와 도착지를 지정하고 경로를 먼저 비교해 주세요.');
+  if (el('routeSearch').disabled) return say('현재 경로 비교가 끝난 뒤 다시 요청해 주세요.');
+  openPanel('route');
+  const results = el('routeOptions');
+  const result = await waitForRouteUi(results,()=>{
+    const traffic = [...results.querySelectorAll('.route-option')].find(button=>
+      button.querySelector('.route-option-name')?.textContent === '정체 적은 길');
+    if (traffic) return traffic.disabled ? null : traffic;
+    return undefined;
+  },()=>el('routeForm').requestSubmit(),signal);
+  if (signal.aborted) return;
+  if (result) {
+    result.click();
+    readRoute();
+  } else say('정체가 적은 경로를 확인하지 못했어요.');
+}
+
+async function command(raw) {
+  const text = raw.trim().slice(0,500);
   if (!text) return;
-  if (/경로|안내|소요/.test(text)) readRoute();
-  else say('“경로 읽어 줘”라고 말해 주세요.');
+  voiceCommandRequest?.abort();
+  const request = voiceCommandRequest = new AbortController();
+  const {signal} = request;
+  const book = savedPlaceBook();
+  showVoiceStatus('음성 명령을 확인하고 있어요.');
+  let result;
+  try {
+    const response = await fetch('/api/voice-command',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text,context:voiceContext(book)}),
+      signal:AbortSignal.any([signal,AbortSignal.timeout(9500)])
+    });
+    if (!response.ok) throw Error('voice command unavailable');
+    result = await response.json();
+  } catch {
+    if (signal.aborted) return;
+    if (/경로|안내|소요/.test(text)) readRoute();
+    else say('“경로 읽어 줘”라고 말해 주세요.');
+    return;
+  }
+  if (signal.aborted) return;
+  try {
+    switch (result?.action) {
+      case 'set_destination':
+      case 'add_waypoint':
+        if (typeof result.place === 'string' && result.place) await applyVoicePlace(result.action,result.place,book,signal);
+        else say('장소 이름이나 주소를 다시 말해 주세요.');
+        break;
+      case 'avoid_traffic_reroute': await avoidTraffic(signal); break;
+      case 'read_route': readRoute(); break;
+      case 'repeat_instruction': say(guide.currentInstruction() || '반복할 주행 안내가 없어요.'); break;
+      case 'stop_guidance':
+        if (!navigationOwner) say('진행 중인 주행 안내가 없어요.');
+        else {
+          stopGuidance();
+          say('주행 안내를 종료했어요.');
+        }
+        break;
+      default: say(result?.message || '음성 명령을 이해하지 못했어요.');
+    }
+  } catch {
+    if (!signal.aborted) say('음성 명령을 적용하지 못했어요. 다시 시도해 주세요.');
+  }
 }
 el('readRoute').onclick = readRoute;
 el('voiceForm').onsubmit = event=>{
@@ -258,33 +434,36 @@ el('voiceForm').onsubmit = event=>{
   command(input.value);
   input.value = '';
 };
-mic.onclick = ()=>{
+el('voiceStatus').textContent = '명령 내용과 장소 이름이 Gemini로 전송돼요.';
+function startMicrophone(button) {
   if (microphone) {microphone.abort();return;}
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    el('voiceStatus').textContent = '이 브라우저에서는 텍스트 명령을 사용할 수 있어요.';
+    showVoiceStatus('이 브라우저에서는 음성 패널에서 텍스트 명령을 사용할 수 있어요.');
     return;
   }
   const recognition = new SpeechRecognition();
   recognition.lang = 'ko-KR';
   recognition.onresult = event=>command(event.results[0][0].transcript);
   recognition.onerror = event=>{
-    if (event.error !== 'aborted') el('voiceStatus').textContent = '마이크를 사용할 수 없어요. 텍스트로 명령을 입력해 주세요.';
+    if (event.error !== 'aborted') showVoiceStatus('마이크를 사용할 수 없어요. 텍스트로 명령을 입력해 주세요.');
   };
   recognition.onend = ()=>{
     microphone = null;
-    mic.setAttribute('aria-pressed','false');
-    mic.textContent = '마이크로 말하기';
+    button.setAttribute('aria-pressed','false');
+    button.textContent = button === mic ? '마이크로 말하기' : '음성 명령';
   };
   try {
     recognition.start();
     microphone = recognition;
-    mic.setAttribute('aria-pressed','true');
-    mic.textContent = '마이크 중지';
+    button.setAttribute('aria-pressed','true');
+    button.textContent = '마이크 중지';
   } catch {
-    el('voiceStatus').textContent = '마이크를 시작하지 못했어요. 텍스트로 명령을 입력해 주세요.';
+    showVoiceStatus('마이크를 시작하지 못했어요. 텍스트로 명령을 입력해 주세요.');
   }
-};
+}
+mic.onclick = ()=>startMicrophone(mic);
+navigationCommand.onclick = ()=>startMicrophone(navigationCommand);
 
 if (!compact.matches) setPanel('route',false);
 map.connect();
