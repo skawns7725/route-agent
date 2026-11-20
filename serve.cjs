@@ -10,7 +10,7 @@ const placePaths = new Set(['/api/places','/api/parking']);
 const parkingRadius = 1000;
 const assets = new Map([
   ['/','route-agent-demo.html'], ['/route-agent-demo.html','route-agent-demo.html'],
-  ...['app.js','map-view.js','signals.js','simulation.js','routing.js','driving.mjs','next-signal.mjs','navigation-guide.mjs','place-search.mjs','saved-places.mjs','map.css'].map(name=>['/'+name,name])
+  ...['app.js','map-view.js','signals.js','simulation.js','routing.js','driving.mjs','gps-departure.mjs','next-signal.mjs','navigation-guide.mjs','place-search.mjs','saved-places.mjs','map.css'].map(name=>['/'+name,name])
 ]);
 const types = {'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css'};
 

@@ -1,3 +1,5 @@
+import {metersBetween} from './gps-departure.mjs';
+
 export const exampleRoute = {
   name: '용운동 → 충남대',
   durationSeconds: 88,
@@ -15,13 +17,6 @@ const testSignals = [
   {fraction:0.51, phaseAtFreeArrival:21},
   {fraction:0.76, phaseAtFreeArrival:33}
 ];
-
-function metersBetween(a, b) {
-  const radians = Math.PI/180;
-  const distance = Math.sin((b.lat-a.lat)*radians/2)**2
-    + Math.cos(a.lat*radians)*Math.cos(b.lat*radians)*Math.sin((b.lng-a.lng)*radians/2)**2;
-  return 6371000*2*Math.asin(Math.min(1,Math.sqrt(distance)));
-}
 
 function positionAt(path, meters) {
   let first = 0;

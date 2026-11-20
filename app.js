@@ -72,6 +72,7 @@ navigationScreen.setAttribute('aria-label','주행 모드');
 navigationScreen.hidden = true;
 navigationScreen.innerHTML = `
   <div class="navigation-cards" data-navigation-cards>
+    <p id="departureNotice" class="departure-notice" role="status" hidden></p>
     <p class="navigation-no-signal">전방 교차로 · 실제 신호 <strong>정보 없음</strong></p>
   </div>
   <section class="navigation-parking" aria-labelledby="navigationParkingTitle" hidden>
@@ -109,6 +110,7 @@ function showSpeed(speed) {
 function setNavigationMode(owner) {
   if (navigationOwner === owner) return;
   if (owner) {
+    microphone?.abort();
     explorationPanel = activePanel;
     explorationFocus = document.activeElement;
     setPanel(null,false);
@@ -123,6 +125,7 @@ function setNavigationMode(owner) {
     syncNavigationVoice();
     navigationExit.focus({preventScroll:true});
   } else {
+    el('departureNotice').hidden = true;
     navigationParking.close(false);
     setPanel(explorationPanel,false);
     queueMicrotask(()=>{
@@ -193,28 +196,23 @@ const navigation = {
 const simulation = initSimulation({map,openPanel,nextSignal,navigation});
 const driving = initDriving({
   map,openPanel,nextSignal,navigation,onSpeed:showSpeed,
+  prepareDeparture:()=>routing.prepareDeparture(),
+  onDepartureNotice(message) {
+    const notice = el('departureNotice');
+    notice.hidden = !message;
+    notice.textContent = message;
+  },
   rerouteFrom:(position,options)=>routing.rerouteFrom(position,options)
 });
 const routing = initRouting({
   map,openPanel,startDrive:driving.start,startSimulation:simulation.playRoadRoute,
   searchParking:destination=>placeSearch.searchParking(destination),
+  routePreference:()=>settings.route,
   setRoadRoute(route) {
     driving.setRoute(route);
     simulation.setRoadRoute(route);
   }
 });
-const routeOptions = el('routeOptions');
-let firstComparedOption;
-new MutationObserver(()=>{
-  // Apply the preference when comparison results arrive, leaving later manual choices alone.
-  if (routeOptions.firstElementChild === firstComparedOption) return;
-  firstComparedOption = routeOptions.firstElementChild;
-  if (!firstComparedOption) return;
-  const preferredLabel = [...el('settingsRoute').options].find(option=>option.value === settings.route)?.textContent;
-  const preferred = [...routeOptions.children].find(button=>!button.disabled &&
-    button.querySelector('.route-option-name')?.textContent === preferredLabel);
-  if (preferred?.getAttribute('aria-pressed') === 'false') preferred.click();
-}).observe(routeOptions,{childList:true});
 const placeSearch = initPlaceSearch({
   map,
   chooseRoutePlace:routing.chooseMapPlace,
@@ -350,33 +348,69 @@ el('voiceForm').onsubmit = event=>{
   command(input.value);
   input.value = '';
 };
-mic.onclick = ()=>{
+const searchMic = el('mapSearchMic');
+const searchForm = el('mapSearchForm');
+const searchInput = el('mapSearchInput');
+const searchSpeechStatus = el('mapSpeechStatus');
+
+function searchDestination(query) {
+  if (searchInput.disabled) return;
+  searchInput.value = query;
+  searchForm.requestSubmit();
+}
+
+for (const button of document.querySelectorAll('[data-quick-place]')) {
+  button.onclick = ()=>{
+    const label = button.dataset.quickPlace;
+    const home = label === '집' && routing.savedHome();
+    if (home) routing.chooseMapPlace('end',home);
+    else if (label === '집') {
+      openPanel('route');
+      el('routeSavedStatus').textContent = '집으로 사용할 장소를 검색하고 저장해 주세요.';
+      el('routeSavedStatus').scrollIntoView({block:'nearest'});
+    } else searchDestination(label);
+  };
+  if (button.dataset.quickPlace !== '집') {
+    button.disabled = true;
+    map.onReady(()=>{button.disabled = false;});
+  }
+}
+
+function listen(button, onResult, report) {
   if (microphone) {microphone.abort();return;}
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    el('voiceStatus').textContent = '이 브라우저에서는 텍스트 명령을 사용할 수 있어요.';
+    report('이 브라우저에서는 음성 인식을 사용할 수 없어요.');
     return;
   }
   const recognition = new SpeechRecognition();
   recognition.lang = 'ko-KR';
-  recognition.onresult = event=>command(event.results[0][0].transcript);
+  recognition.onresult = event=>onResult(event.results[0][0].transcript);
   recognition.onerror = event=>{
-    if (event.error !== 'aborted') el('voiceStatus').textContent = '마이크를 사용할 수 없어요. 텍스트로 명령을 입력해 주세요.';
+    if (event.error !== 'aborted') report('마이크를 사용할 수 없어요. 텍스트로 입력해 주세요.');
   };
   recognition.onend = ()=>{
     microphone = null;
-    mic.setAttribute('aria-pressed','false');
-    mic.textContent = '마이크로 말하기';
+    button.setAttribute('aria-pressed','false');
+    if (button === mic) mic.textContent = '마이크로 말하기';
   };
   try {
     recognition.start();
     microphone = recognition;
-    mic.setAttribute('aria-pressed','true');
-    mic.textContent = '마이크 중지';
+    button.setAttribute('aria-pressed','true');
+    if (button === mic) mic.textContent = '마이크 중지';
   } catch {
-    el('voiceStatus').textContent = '마이크를 시작하지 못했어요. 텍스트로 명령을 입력해 주세요.';
+    report('마이크를 시작하지 못했어요. 텍스트로 입력해 주세요.');
   }
+}
+
+mic.onclick = ()=>listen(mic,command,message=>{el('voiceStatus').textContent = message;});
+searchMic.onclick = ()=>{
+  searchSpeechStatus.hidden = true;
+  listen(searchMic,text=>searchDestination(text.trim()),message=>{
+    searchSpeechStatus.hidden = false;
+    searchSpeechStatus.textContent = message;
+  });
 };
 
-if (!compact.matches) setPanel('route',false);
 map.connect();

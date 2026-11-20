@@ -36,9 +36,11 @@
     </header>
     <div id="mapSearch" class="map-search" role="search" aria-label="지도 장소 검색">
       <form id="mapSearchForm" class="map-search-form">
-        <input id="mapSearchInput" type="search" aria-label="장소 이름 또는 주소" placeholder="장소 이름 또는 주소" maxlength="150" autocomplete="off" required disabled>
+        <input id="mapSearchInput" type="search" aria-label="장소 이름 또는 주소" placeholder="어디로 갈까요?" maxlength="150" autocomplete="off" required disabled>
         <button id="mapSearchSubmit" class="primary" type="submit" disabled>검색</button>
+        <button id="mapSearchMic" class="map-search-mic" type="button" aria-label="음성으로 장소 검색" aria-pressed="false" disabled><span class="rail-icon icon-voice" aria-hidden="true"><i></i></span></button>
       </form>
+      <p id="mapSpeechStatus" class="map-speech-status" role="status" hidden></p>
       <section id="mapSearchResults" class="map-place-sheet" aria-label="장소 검색 결과" hidden>
         <div class="map-place-top">
           <p id="mapSearchStatus" role="status"></p>
@@ -63,6 +65,12 @@
         </div>
         <a id="mapPlaceReviews" class="map-place-reviews" target="_blank" rel="noopener noreferrer">네이버 지도에서 리뷰 보기 <span aria-hidden="true">↗</span></a>
       </section>
+    </div>
+    <div class="home-weather" aria-label="예시 기온 12도"><span aria-hidden="true">☀</span> 12°C</div>
+    <div class="home-destinations" role="group" aria-label="빠른 목적지 · 예시 소요 시간">
+      <button type="button" data-quick-place="집"><strong>집</strong><span>12분</span></button>
+      <button type="button" data-quick-place="학교"><strong>학교</strong><span>18분</span></button>
+      <button type="button" data-quick-place="모교"><strong>모교</strong><span>24분</span></button>
     </div>
     <div class="map-zoom" aria-label="지도 크기">
       <button id="zoomIn" type="button" aria-label="확대">+</button>
