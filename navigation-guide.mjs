@@ -37,11 +37,13 @@ export function buildNavigationPlan(route) {
   };
 }
 
-export function readNavigation(plan,progress,secondsRemaining) {
+export function readNavigation(plan,progress,secondsRemaining,estimatedAt) {
   const fraction = Math.min(1,Math.max(0,progress));
   const offset = fraction * plan.length;
   const index = plan.steps.findIndex(step=>step.meters >= offset);
   const step = index === -1 || fraction === 1 ? null : plan.steps[index];
+  const estimate = secondsRemaining ?? (Number.isFinite(plan.seconds) ? (1-fraction)*plan.seconds : null);
+  const seconds = Number.isFinite(estimate) && estimate >= 0 ? estimate : null;
   return {
     step,index,
     junctions:plan.steps.slice(Math.max(0,index)).filter(item=>item.junction && item.meters >= offset &&
@@ -49,18 +51,22 @@ export function readNavigation(plan,progress,secondsRemaining) {
     stepDistance:step ? Math.max(0,step.meters - offset) : null,
     passedWaypoints:plan.steps.filter(item=>item.type === waypoint && item.meters < offset).length,
     remaining:(1-fraction)*plan.distance,
-    seconds:secondsRemaining ?? (Number.isFinite(plan.seconds) ? (1-fraction)*plan.seconds : null)
+    seconds,
+    arrivalAt:seconds !== null && Number.isFinite(estimatedAt) ? estimatedAt + seconds*1000 : null
   };
 }
 
 const metersText = meters=>meters >= 1000 ? (meters/1000).toFixed(1)+' km' : Math.round(meters)+' m';
 const minutesText = seconds=>seconds === 0 ? '0분' : seconds < 60 ? '1분 미만' : '약 '+Math.ceil(seconds/60)+'분';
+const arrivalClock = new Intl.DateTimeFormat('ko-KR',{hour:'numeric',minute:'2-digit'});
 
 export function initNavigationGuide({card,speak,searchParking}) {
   const turn = card.querySelector('strong');
   const distance = card.querySelector('[data-guide-distance]');
   const road = card.querySelector('[data-guide-road]');
   const stats = card.querySelector('[data-guide-stats]');
+  const etaRow = card.querySelector('[data-guide-eta-row]');
+  const eta = etaRow.querySelector('time');
   const branches = card.querySelector('[data-guide-branches]');
   const parking = card.querySelector('[data-guide-parking]');
   const list = card.querySelector('[data-guide-list]');
@@ -69,12 +75,26 @@ export function initNavigationGuide({card,speak,searchParking}) {
   function text(node,value) {
     if (node.textContent !== value) node.textContent = value;
   }
+  function showArrivalTime(timestamp) {
+    etaRow.hidden = timestamp === null;
+    if (timestamp === null) {
+      eta.removeAttribute('datetime');
+      text(eta,'');
+      return;
+    }
+    const time = new Date(Math.floor(timestamp/1000)*1000);
+    const stamp = time.toISOString();
+    if (eta.getAttribute('datetime') !== stamp) {
+      eta.setAttribute('datetime',stamp);
+      text(eta,arrivalClock.format(time));
+    }
+  }
   function stop(owner) {
     if (session?.owner !== owner) return;
     session = null;
     card.hidden = true;
   }
-  parking.onclick = ()=>{if (session?.destination) searchParking(session.destination);};
+  parking.onclick = ()=>{if (session?.destination) searchParking(session.destination,parking);};
   return {
     start(owner,route,dock) {
       session = {owner,plan:buildNavigationPlan(route),destination:route.destination,lastAnnouncement:null,progress:0,
@@ -86,7 +106,8 @@ export function initNavigationGuide({card,speak,searchParking}) {
       text(road,'');
       text(stats,'');
       text(branches,'');
-      parking.hidden = true;
+      parking.hidden = !session.destination;
+      showArrivalTime(null);
       list.hidden = session.plan.steps.length === 0;
       list.open = false;
       steps.replaceChildren(...session.plan.steps.map(step=>{
@@ -97,16 +118,16 @@ export function initNavigationGuide({card,speak,searchParking}) {
     },
     stop,
     passedWaypoints(owner) {return session?.owner === owner ? session.passedWaypoints : 0;},
-    update(owner,progress,{seconds,arrived = false,announce = false,elapsed,distanceTraveled} = {}) {
+    update(owner,progress,{seconds,arrived = false,announce = false,elapsed,distanceTraveled,estimatedAt = Date.now()} = {}) {
       if (session?.owner !== owner) return;
       if (progress === null) {
         text(turn,'경로 위 현재 위치를 확인하고 있어요.');
         for (const node of [distance,road,stats,branches]) text(node,'');
-        parking.hidden = true;
+        showArrivalTime(null);
         return;
       }
       session.progress = Math.max(session.progress,progress);
-      const state = readNavigation(session.plan,session.progress,seconds);
+      const state = readNavigation(session.plan,session.progress,seconds,estimatedAt);
       session.passedWaypoints = state.passedWaypoints;
       const {step,stepDistance} = state;
       const index = step && !arrived ? state.index : -1;
@@ -115,7 +136,6 @@ export function initNavigationGuide({card,speak,searchParking}) {
         steps.children[index]?.setAttribute('aria-current','step');
         session.highlight = index;
       }
-      parking.hidden = !session.destination || state.remaining > 500;
       text(turn,arrived ? '목적지 도착' : step?.text || '다음 방향 정보 없음');
       text(distance,step ? metersText(stepDistance) : '');
       text(road,step?.road || '');
@@ -123,15 +143,15 @@ export function initNavigationGuide({card,speak,searchParking}) {
       text(branches,arrived || !upcoming.length ? '' : '이어지는 분기 · '+upcoming
         .map(item=>[item.text,item.road].filter(Boolean).join(' ')).join(' → '));
       if (arrived) {
+        showArrivalTime(null);
         text(stats,[metersText(distanceTraveled ?? session.plan.distance),Number.isFinite(elapsed) ? minutesText(elapsed) : '']
           .filter(Boolean).join(' · '));
         if (announce && !session.arrivalAnnounced && speak('목적지에 도착했습니다.')) session.arrivalAnnounced = true;
         return;
       }
-      const eta = Number.isFinite(state.seconds)
-        ? ' · 도착 예정 '+new Date(Date.now()+state.seconds*1000).toLocaleTimeString('ko-KR',{hour:'numeric',minute:'2-digit'}) : '';
       text(stats,'남은 '+metersText(state.remaining)+
-        (Number.isFinite(state.seconds) ? ' · '+minutesText(state.seconds) : '')+eta);
+        (state.seconds === null ? '' : ' · '+minutesText(state.seconds)));
+      showArrivalTime(state.arrivalAt);
       if (announce && step && stepDistance <= (step.type === arrival ? 500 : 300) &&
           session.lastAnnouncement !== state.index &&
           speak(metersText(stepDistance)+' 앞 '+step.text+(step.road ? ', '+step.road : ''))) {

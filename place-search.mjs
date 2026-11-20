@@ -1,6 +1,8 @@
-async function fetchPlaces(path, params, message) {
+async function fetchPlaces(path, params, message, cancel) {
   try {
-    const response = await fetch(path+'?'+new URLSearchParams(params),{signal:AbortSignal.timeout(10000)});
+    const timeout = AbortSignal.timeout(10000);
+    const signal = cancel ? AbortSignal.any([cancel,timeout]) : timeout;
+    const response = await fetch(path+'?'+new URLSearchParams(params),{signal});
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data?.places)) return data.places;
@@ -16,12 +18,65 @@ export function createPlaceLookup() {
 }
 
 export function createParkingLookup() {
-  return async destination=>{
+  return async (destination,signal)=>{
     const {lat,lng} = destination ?? {};
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       throw new Error('도착지 위치를 확인할 수 없어요.');
     }
-    return fetchPlaces('/api/parking',{lat,lng},'주차장을 가져오지 못했어요. 다시 검색해 주세요.');
+    return fetchPlaces('/api/parking',{lat,lng},'주차장을 가져오지 못했어요. 다시 검색해 주세요.',signal);
+  };
+}
+
+const fromDestination = place=>Number.isFinite(place.distance) ? `도착지와 직선 ${place.distance.toLocaleString('ko-KR')}m` : '';
+
+export function initNavigationParking({sheet}) {
+  const dismiss = sheet.querySelector('button');
+  const status = sheet.querySelector('[role="status"]');
+  const list = sheet.querySelector('ul');
+  const lookup = createParkingLookup();
+  let request, trigger;
+
+  function close(restoreFocus = true) {
+    if (sheet.hidden) return false;
+    sheet.hidden = true;
+    request?.abort();
+    request = null;
+    if (restoreFocus && trigger?.isConnected && !trigger.hidden) trigger.focus({preventScroll:true});
+    trigger = null;
+    return true;
+  }
+  dismiss.onclick = ()=>close();
+
+  return {
+    close,
+    async open(destination,button) {
+      request?.abort();
+      const current = request = new AbortController();
+      trigger = button;
+      const name = destination.name || '도착지';
+      status.textContent = `${name} 반경 1km에서 주차장을 찾고 있어요…`;
+      list.replaceChildren();
+      sheet.scrollTop = 0;
+      sheet.hidden = false;
+      dismiss.focus({preventScroll:true});
+      try {
+        const places = await lookup(destination,current.signal);
+        if (request !== current) return;
+        list.replaceChildren(...places.map(place=>{
+          const item = document.createElement('li');
+          const title = document.createElement('strong');
+          title.textContent = place.name;
+          const details = document.createElement('span');
+          details.textContent = [place.address,fromDestination(place)].filter(Boolean).join(' · ');
+          item.append(title,details);
+          return item;
+        }));
+        status.textContent = places.length ? `${name} 반경 1km · 주차장 ${places.length}곳`
+          : `${name} 반경 1km에 검색된 주차장이 없어요.`;
+      } catch {
+        if (request === current) status.textContent = '주차장을 가져오지 못했어요. 다시 검색해 주세요.';
+      }
+    }
   };
 }
 
@@ -45,8 +100,6 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
   const phone = el('mapPlacePhone');
   const reviews = el('mapPlaceReviews');
   let lookup, parkingLookup, selection, markers = [], generation = 0;
-  const fromDestination = place=>Number.isFinite(place.distance) ? `도착지와 직선 ${place.distance.toLocaleString('ko-KR')}m` : '';
-
   function hideDetails() {
     selection = null;
     details.hidden = true;

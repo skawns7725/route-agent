@@ -482,8 +482,8 @@ button { text-align: center; }
 .navigation-cards .navigation-guide { order: -1; }
 .navigation-cards .navigation-guide-row > strong { font-size: clamp(19px, 4vw, 27px); }
 .navigation-cards .navigation-guide-row > b { font-size: clamp(17px, 4vw, 22px); }
-.navigation-cards :is([data-guide-branches], [data-guide-parking]) { display: none; }
-.navigation-cards :is([data-guide-road], [data-guide-stats]) { color: #c7d1e1; font-size: 15px; }
+.navigation-cards [data-guide-branches] { display: none; }
+.navigation-cards :is([data-guide-road], [data-guide-stats], [data-guide-eta-row]) { color: #c7d1e1; font-size: 15px; }
 .navigation-cards .navigation-guide summary { min-height: 36px; }
 .navigation-cards .next-signal :is(p, span), .navigation-no-signal { color: #c7d1e1; }
 .navigation-cards .next-signal li { background: #29323e; border-color: #485466; }
@@ -505,7 +505,7 @@ button { text-align: center; }
 }
 .navigation-controls span { display: block; color: #c7d1e1; font-size: 11px; }
 .navigation-controls strong { font-size: clamp(15px, 4vw, 23px); white-space: nowrap; }
-.navigation-controls button {
+.navigation-controls button, .navigation-parking button, .navigation-cards [data-guide-parking] {
   min-height: 44px;
   padding: 6px 9px;
   border: 1px solid #465166;
@@ -514,9 +514,33 @@ button { text-align: center; }
   color: inherit;
   font-size: 13px;
 }
-.navigation-controls button:hover { background: #38445a; }
-.navigation-controls button:focus-visible, .navigation-cards summary:focus-visible { outline-color: #9cc7ff; }
+.navigation-controls button:hover, .navigation-parking button:hover, .navigation-cards [data-guide-parking]:hover { background: #38445a; }
+.navigation-screen :is(button,summary):focus-visible { outline-color: #9cc7ff; }
 .navigation-controls [data-navigation-voice][aria-pressed="true"] { border-color: #8fbeff; }
+.navigation-parking {
+  position: absolute;
+  z-index: 1;
+  top: max(12px, env(safe-area-inset-top));
+  right: var(--navigation-edge);
+  width: min(370px, calc(100% - 2 * var(--navigation-edge)));
+  max-height: min(52dvh,400px);
+  padding: 12px 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #353d48;
+  border-radius: 14px;
+  background: #171c24;
+  pointer-events: auto;
+}
+.navigation-parking-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.navigation-parking h2 { margin: 0; font-size: 17px; }
+.navigation-parking p, .navigation-parking li span { color: #c7d1e1; font-size: 13px; }
+.navigation-parking ul { list-style: none; margin: 0; padding: 0; }
+.navigation-parking li { display: grid; gap: 3px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #353d48; }
+.navigation-parking li span:empty { display: none; }
+@media (width < 860px) {
+  .navigation-parking { top: auto; bottom: calc(94px + env(safe-area-inset-bottom)); max-height: min(42dvh,360px); }
+}
 .sample-shortcut { position: absolute; right: 20px; bottom: 25px; z-index: 2; background: var(--primary); color: #fff; border-color: var(--primary); }
 .sample-shortcut:not([hidden]) { display: none; }
 .map-unavailable .sample-shortcut:not([hidden]) { display: block; }
