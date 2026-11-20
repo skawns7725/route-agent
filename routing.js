@@ -1,4 +1,5 @@
 import {createPlaceLookup} from './place-search.mjs';
+import {normalizeSavedPlace,readSavedPlaces,savePlace,removePlace,writeSavedPlaces} from './saved-places.mjs';
 
 const labels = {
   fast:'빠른 길',
@@ -6,13 +7,39 @@ const labels = {
   traffic:'정체 적은 길',
   free:'무료도로'
 };
-const slotLabels = {start:'출발지',via:'경유지',end:'도착지'};
+const slotLabels = {start:'출발지',end:'도착지'};
+const savedLabels = {home:'집',work:'회사',favorites:'즐겨찾기',recent:'최근 목적지'};
+const waypointLimit = 5;
 const formatDistance = meters => (meters/1000).toLocaleString('ko-KR',{maximumFractionDigits:1})+' km';
 const formatDuration = seconds => seconds < 60 ? '1분 미만' : '약 '+Math.round(seconds/60)+'분';
+const formatClock = new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'numeric',minute:'2-digit'});
+const coordinates = ({lng,lat})=>lng+','+lat;
+
+function tripParams(origin,destination,waypoints) {
+  const params = new URLSearchParams({origin:coordinates(origin),destination:coordinates(destination)});
+  for (const place of waypoints) params.append('via',coordinates(place));
+  return params;
+}
+
+async function requestRoute(path,params,signal) {
+  const response = await fetch(path+'?'+params,{
+    signal:signal ? AbortSignal.any([signal,AbortSignal.timeout(12000)]) : AbortSignal.timeout(12000)
+  });
+  const data = await response.json();
+  if (!response.ok) throw Error(data.error || '경로를 가져오지 못했어요.');
+  return data;
+}
+
+function navigationRoute(route,{kind,name,tripLabel,origin,destination,waypoints}) {
+  const points = routePoints(route);
+  if (points.length < 2) return null;
+  return {kind,name,tripLabel,points,sections:route.sections,durationSeconds:route.summary.duration,
+    distanceMeters:route.summary.distance,origin,destination,waypoints};
+}
 
 function routePoints(route) {
   const points = [];
-  for (const section of route.sections) {
+  for (const section of route.sections || []) {
     for (const road of section.roads || []) {
       const coordinates = road.vertexes || [];
       for (let i=0;i+1<coordinates.length;i+=2) {
@@ -31,7 +58,16 @@ function routeFare(toll) {
   return '통행료 '+toll.toLocaleString('ko-KR')+'원';
 }
 
-export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPanel}) {
+function actionButton(label,action) {
+  const button = document.createElement('button');
+  button.className = 'secondary';
+  button.type = 'button';
+  button.textContent = label;
+  button.addEventListener('click',action);
+  return button;
+}
+
+export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPanel,searchParking}) {
   const root = document.getElementById('routeContent');
   root.innerHTML = `
     <div class="route-toolbar inline-actions">
@@ -43,7 +79,8 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     <form id="routeForm">
       <div class="route-fields" id="routeFields"></div>
       <div class="inline-actions">
-        <button class="secondary" id="routeVia" type="button" aria-expanded="false" aria-controls="route-via">경유지 추가</button>
+        <button class="secondary" id="routeVia" type="button" aria-controls="route-via" aria-describedby="routeViaCount">경유지 추가</button>
+        <span id="routeViaCount" class="muted">0 / 5개</span>
         <button class="primary" id="routeSearch" type="submit" disabled>경로 비교</button>
       </div>
     </form>
@@ -57,7 +94,21 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     <div class="inline-actions">
       <button class="primary" id="routeSimulation" type="button" hidden>이 경로로 모의 주행</button>
       <button class="secondary" id="routeDrive" type="button" hidden>GPS 주행 시작</button>
+      <button class="secondary" id="routeParking" type="button" hidden>도착지 주변 주차장</button>
+      <button class="secondary" id="routeFuture" type="button" aria-controls="routeFutureList" hidden>출발 시간 비교</button>
     </div>
+    <p id="routeFutureStatus" class="status" role="status" hidden></p>
+    <ul id="routeFutureList" class="route-future-list" aria-label="출발 시간별 빠른 길" hidden></ul>
+    <details>
+      <summary>저장한 장소</summary>
+      <div class="field-grid">
+        <label class="field">저장할 장소 <select id="routeSaveSource"><option value="end">도착지</option><option value="start">출발지</option></select></label>
+        <label class="field">분류 <select id="routeSaveGroup"><option value="favorites">즐겨찾기</option><option value="home">집</option><option value="work">회사</option><option value="recent">최근 목적지</option></select></label>
+      </div>
+      <div class="inline-actions"><button class="secondary" id="routeSavePlace" type="button" disabled>이 기기에 저장</button></div>
+      <p id="routeSavedStatus" class="status" role="status"></p>
+      <ul id="routeSavedList" class="route-saved-list"></ul>
+    </details>
   `;
   const find = id => document.getElementById(id);
   const status = find('routeStatus');
@@ -70,6 +121,20 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   const simulate = find('routeSimulation');
   const gpsButton = find('routeGps');
   const viaButton = find('routeVia');
+  const fields = find('routeFields');
+  const viaFields = document.createElement('div');
+  viaFields.id = 'route-via';
+  viaFields.className = 'route-fields route-via-fields';
+  viaFields.hidden = true;
+  const parking = find('routeParking');
+  const future = find('routeFuture');
+  const futureStatus = find('routeFutureStatus');
+  const futureList = find('routeFutureList');
+  const savedStatus = find('routeSavedStatus');
+  const savedList = find('routeSavedList');
+  const saveButton = find('routeSavePlace');
+  const saveSource = find('routeSaveSource');
+  const saveGroup = find('routeSaveGroup');
   const summaryCard = find('routeSummary');
   summaryCard.innerHTML = `
     <div class="route-summary-copy">
@@ -86,12 +151,21 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   const summaryDetails = find('routeSummaryDetails');
   const summaryDrive = find('routeSummaryDrive');
   const slots = {};
-  let lookup, sdk, controller, selectedRoute = null;
+  const waypoints = [];
+  let nextWaypointId = 1;
+  let lookup, sdk, controller, futureRequest, fastest, selectedRoute = null;
   let gpsPending = false;
+  let storage;
+  try { storage = window.localStorage; } catch { /* Device storage can be blocked. */ }
+  let savedPlaces = readSavedPlaces(storage);
+
+  function tripSlots() {
+    return [slots.start,...waypoints,slots.end];
+  }
 
   function tripMarkers() {
-    return Object.values(slots).filter(slot => slot.place).map(slot => ({
-      lat:slot.place.lat, lng:slot.place.lng, label:slotLabels[slot.id]+' · '+slot.place.name
+    return tripSlots().filter(slot => slot.place).map(slot => ({
+      lat:slot.place.lat, lng:slot.place.lng, label:slot.label.textContent+' · '+slot.place.name
     }));
   }
 
@@ -99,6 +173,16 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     controller?.abort();
     controller = null;
     selectedRoute = null;
+    futureRequest?.abort();
+    futureRequest = null;
+    fastest = null;
+    future.hidden = true;
+    future.disabled = false;
+    futureStatus.hidden = true;
+    futureList.hidden = true;
+    futureList.replaceChildren();
+    parking.hidden = !searchParking || !slots.end.place;
+    updateSaveButton();
     compare.disabled = !sdk;
     options.replaceChildren();
     steps.replaceChildren();
@@ -110,6 +194,62 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     map.setRoute({points:[],markers:tripMarkers()});
     setRoadRoute(null);
   }
+
+  function updateSaveButton() {
+    saveButton.disabled = !normalizeSavedPlace(slots[saveSource.value]?.place);
+    saveGroup.querySelector('option[value="recent"]').disabled = saveSource.value !== 'end';
+    if (saveSource.value !== 'end' && saveGroup.value === 'recent') saveGroup.value = 'favorites';
+  }
+
+  function setSavedPlaces(next,message) {
+    if (!writeSavedPlaces(storage,next)) {
+      savedStatus.textContent = '이 브라우저에서 장소를 저장하거나 삭제할 수 없어요.';
+      return;
+    }
+    savedPlaces = next;
+    renderSavedPlaces();
+    savedStatus.textContent = message;
+  }
+
+  function renderSavedPlaces() {
+    const groups = Object.keys(savedLabels).flatMap(group=>
+      (Array.isArray(savedPlaces[group]) ? savedPlaces[group] : [savedPlaces[group]])
+        .filter(Boolean).map(place=>({group,place})));
+    savedList.hidden = !groups.length;
+    savedList.replaceChildren(...groups.map(({group,place})=>{
+      const item = document.createElement('li');
+      item.className = 'route-saved-entry';
+      const name = document.createElement('strong');
+      name.textContent = savedLabels[group]+' · '+place.name;
+      const address = document.createElement('div');
+      address.className = 'muted';
+      address.textContent = place.address;
+      address.hidden = !place.address;
+      const controls = document.createElement('div');
+      controls.className = 'inline-actions';
+      const start = actionButton('출발지로',()=>choosePlace(slots.start,place));
+      const end = actionButton('도착지로',()=>choosePlace(slots.end,place));
+      const remove = actionButton('삭제',()=>{
+        setSavedPlaces(removePlace(readSavedPlaces(storage),group,place),place.name+'을(를) 이 기기에서 삭제했어요.');
+        saveSource.focus();
+      });
+      for (const button of [start,end,remove]) button.setAttribute('aria-label',name.textContent+' '+button.textContent);
+      controls.append(start,end,remove);
+      item.append(name,address,controls);
+      return item;
+    }));
+  }
+
+  saveSource.addEventListener('change',updateSaveButton);
+  saveButton.addEventListener('click',()=>{
+    const group = saveGroup.value;
+    const place = slots[saveSource.value].place;
+    const current = readSavedPlaces(storage);
+    const next = savePlace(current,group,place);
+    if (next !== current) setSavedPlaces(next,savedLabels[group]+'에 '+place.name+'을(를) 저장했어요.');
+  });
+  savedStatus.textContent = '선택한 장소만 이 브라우저에 저장해요.';
+  renderSavedPlaces();
 
   function cancelLookup(slot) {
     slot.version++;
@@ -163,23 +303,22 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     }
   }
 
-  for (const [id,label] of Object.entries(slotLabels)) {
+  function createSlot(id,labelText) {
     const row = document.createElement('div');
     row.id = 'route-'+id;
-    row.hidden = id === 'via';
     const field = document.createElement('label');
     field.className = 'field';
-    field.textContent = label;
+    const label = document.createElement('span');
+    label.textContent = labelText;
     const input = document.createElement('input');
-    input.placeholder = id === 'start' ? '장소 이름 또는 주소' : id === 'via' ? '경유할 장소 검색' : '목적지 검색';
+    input.placeholder = id === 'start' ? '장소 이름 또는 주소' : id === 'end' ? '목적지 검색' : '경유할 장소 검색';
     input.autocomplete = 'off';
     const results = document.createElement('div');
     results.className = 'route-place-results';
     results.setAttribute('role','status');
-    field.append(input);
+    field.append(label,input);
     row.append(field,results);
-    find('routeFields').append(row);
-    const slot = slots[id] = {id,row,input,results,place:null,version:0};
+    const slot = {row,label,input,results,place:null,version:0};
     input.addEventListener('input',() => {
       slot.place = null;
       cancelLookup(slot);
@@ -221,21 +360,66 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
         else buttons[next]?.focus();
       }
     });
+    return slot;
+  }
+
+  slots.start = createSlot('start',slotLabels.start);
+  slots.end = createSlot('end',slotLabels.end);
+  fields.append(slots.start.row,viaFields,slots.end.row);
+
+  function updateWaypoints() {
+    viaFields.hidden = !waypoints.length;
+    viaButton.disabled = waypoints.length >= waypointLimit;
+    find('routeViaCount').textContent = waypoints.length+' / '+waypointLimit+'개';
+    waypoints.forEach((slot,index)=>{
+      slot.label.textContent = '경유지 '+(index+1);
+      slot.up.disabled = index === 0;
+      slot.down.disabled = index === waypoints.length-1;
+      for (const button of [slot.up,slot.down,slot.remove]) {
+        button.setAttribute('aria-label',slot.label.textContent+' '+button.textContent);
+      }
+      viaFields.append(slot.row);
+    });
+  }
+
+  function moveWaypoint(slot,change) {
+    const index = waypoints.indexOf(slot);
+    const next = index+change;
+    if (next < 0 || next >= waypoints.length) return;
+    [waypoints[index],waypoints[next]] = [waypoints[next],waypoints[index]];
+    updateWaypoints();
+    clearResults();
+    status.textContent = '경유지 순서를 변경했어요. 경로를 다시 비교해 주세요.';
+    const control = change < 0 ? slot.up : slot.down;
+    (control.disabled ? slot.input : control).focus();
+  }
+
+  function removeWaypoint(slot) {
+    const index = waypoints.indexOf(slot);
+    waypoints.splice(index,1);
+    cancelLookup(slot);
+    slot.row.remove();
+    updateWaypoints();
+    clearResults();
+    status.textContent = '경유지를 삭제했어요.';
+    (waypoints[index]?.input || waypoints.at(-1)?.input || viaButton).focus();
   }
 
   viaButton.addEventListener('click',() => {
-    const slot = slots.via;
-    slot.row.hidden = !slot.row.hidden;
-    viaButton.setAttribute('aria-expanded',String(!slot.row.hidden));
-    viaButton.textContent = slot.row.hidden ? '경유지 추가' : '경유지 삭제';
-    if (!slot.row.hidden) {
-      slot.input.focus();
-      return;
-    }
-    cancelLookup(slot);
-    slot.place = null;
-    slot.input.value = '';
+    if (waypoints.length >= waypointLimit) return;
+    const slot = createSlot('via-'+nextWaypointId++,'경유지');
+    const controls = document.createElement('div');
+    controls.className = 'inline-actions route-waypoint-controls';
+    slot.up = actionButton('위로',()=>moveWaypoint(slot,-1));
+    slot.down = actionButton('아래로',()=>moveWaypoint(slot,1));
+    slot.remove = actionButton('삭제',()=>removeWaypoint(slot));
+    controls.append(slot.up,slot.down,slot.remove);
+    slot.row.append(controls);
+    waypoints.push(slot);
+    updateWaypoints();
     clearResults();
+    status.textContent = '경유지를 검색해 선택하거나 삭제해 주세요.';
+    slot.input.focus();
   });
   find('routeSwap').addEventListener('click',() => {
     const {start,end} = slots;
@@ -243,6 +427,8 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     cancelLookup(end);
     [start.place,end.place] = [end.place,start.place];
     [start.input.value,end.input.value] = [end.input.value,start.input.value];
+    waypoints.reverse();
+    updateWaypoints();
     clearResults();
   });
 
@@ -274,7 +460,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
         useSearch('국내 경로를 조회할 수 있도록 출발지를 검색해 주세요.');
         return;
       }
-      choosePlace(start,{lat,lng,name:'현재 위치'});
+      choosePlace(start,{lat,lng,name:'현재 위치',ephemeral:true});
       slots.end.input.focus();
     }, () => {
       if (finish()) useSearch('현재 위치에 접근할 수 없어요. 장소 이름이나 주소로 출발지를 검색해 주세요.');
@@ -283,16 +469,18 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
 
   function selectRoute(option, buttons) {
     const {route,kind} = option;
-    const points = routePoints(route);
-    if (points.length < 2) {
+    const {place:origin} = slots.start;
+    const {place:destination} = slots.end;
+    const name = labels[kind];
+    const tripLabel = origin.name+' → '+destination.name;
+    const nextRoute = navigationRoute(route,{kind,name,tripLabel,origin,destination,waypoints:waypoints.map(slot=>slot.place)});
+    if (!nextRoute) {
       status.textContent = '경로를 지도에 표시할 좌표가 부족해요.';
       return;
     }
-    const name = labels[kind];
-    const tripLabel = slots.start.place.name+' → '+slots.end.place.name;
-    selectedRoute = {name,tripLabel,points,durationSeconds:route.summary.duration,distanceMeters:route.summary.distance};
+    selectedRoute = nextRoute;
     setRoadRoute(selectedRoute);
-    map.setRoute({points,markers:tripMarkers()});
+    map.setRoute({points:selectedRoute.points,markers:tripMarkers()});
     for (const [button,current] of buttons) button.setAttribute('aria-pressed',String(current === option));
     steps.replaceChildren();
     for (const section of route.sections) {
@@ -316,7 +504,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     summaryMetrics.replaceChildren(duration, ' · '+[formatDistance(route.summary.distance), routeFare(route.summary.fare?.toll), name].join(' · '));
     summaryDetails.hidden = details.hidden;
     summaryCard.hidden = false;
-    map.focusRoute(points);
+    map.focusRoute(selectedRoute.points);
   }
 
   function showOptions(data) {
@@ -352,6 +540,9 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     const first = buttons.values().next().value;
     if (first) selectRoute(first,buttons);
     const time = new Date(data.fetchedAt);
+    const fast = data.options.find(option=>option.kind === 'fast')?.route;
+    fastest = fast && {durationSeconds:fast.summary.duration,departureAt:data.fetchedAt};
+    future.hidden = !selectedRoute;
     source.textContent = '카카오모빌리티 조회 '+time.toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'})+
       (congested ? ' · 정체 비율은 교통 상태가 확인된 거리 기준' : '');
     source.hidden = false;
@@ -360,30 +551,24 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   find('routeForm').addEventListener('submit',async event => {
     event.preventDefault();
     if (!sdk || controller) return;
-    const {start,via,end} = slots;
-    if (!start.place || !end.place || (!via.row.hidden && via.input.value.trim() && !via.place)) {
+    const {start,end} = slots;
+    const places = tripSlots().map(slot=>slot.place);
+    if (places.some(place=>!place)) {
       status.textContent = '검색 결과에서 출발지·도착지와 입력한 경유지를 선택해 주세요.';
       return;
     }
-    const coordinates = place => place.lng+','+place.lat;
-    const trip = [start.place,via.place,end.place].filter(Boolean).map(coordinates);
-    if (new Set(trip).size !== trip.length) {
+    if (new Set(places.map(coordinates)).size !== places.length) {
       status.textContent = '서로 다른 장소를 선택해 주세요.';
       return;
     }
     clearResults();
     const request = controller = new AbortController();
-    const params = new URLSearchParams({origin:trip[0],destination:trip.at(-1)});
-    if (trip.length === 3) params.set('via',trip[1]);
+    const params = tripParams(start.place,end.place,waypoints.map(slot=>slot.place));
     compare.disabled = true;
     status.textContent = '카카오모빌리티에서 경로를 비교하는 중…';
     try {
-      const response = await fetch('/api/route-comparison?'+params,{
-        signal:AbortSignal.any([request.signal,AbortSignal.timeout(12000)])
-      });
-      const data = await response.json();
+      const data = await requestRoute('/api/route-comparison',params,request.signal);
       if (controller !== request) return;
-      if (!response.ok) throw Error(data.error || '경로를 가져오지 못했어요.');
       status.textContent = '지도에 표시할 경로를 선택해 주세요.';
       showOptions(data);
     } catch (error) {
@@ -397,6 +582,53 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
       }
     }
   });
+  parking.addEventListener('click',()=>{if (slots.end.place) searchParking?.(slots.end.place);});
+
+  function futureItem(label,value,error) {
+    const item = document.createElement('li');
+    const departure = Date.parse(value?.departureAt);
+    if (!Number.isFinite(departure) || !Number.isFinite(value?.durationSeconds)) {
+      item.textContent = label+' · '+(error || '예상 소요 시간을 확인할 수 없어요.');
+      return item;
+    }
+    const arrival = departure+value.durationSeconds*1000;
+    item.textContent = label+' · '+formatDuration(value.durationSeconds)+' · '+formatClock.format(departure)+' 출발 / '+formatClock.format(arrival)+' 도착 예상';
+    return item;
+  }
+
+  future.addEventListener('click',async()=>{
+    if (!selectedRoute || futureRequest) return;
+    const {origin,destination,waypoints:stops} = selectedRoute;
+    const request = futureRequest = new AbortController();
+    futureList.replaceChildren(futureItem('현재 조회값',fastest));
+    futureList.hidden = false;
+    futureStatus.hidden = false;
+    futureStatus.textContent = '30분 뒤와 1시간 뒤의 빠른 길을 조회하고 있어요.';
+    future.disabled = true;
+    try {
+      const departures = [[30,'30분 뒤'],[60,'1시간 뒤']];
+      const items = await Promise.all(departures.map(async ([minutes,label])=>{
+        const params = tripParams(origin,destination,stops);
+        params.set('minutes',String(minutes));
+        try {
+          const data = await requestRoute('/api/future-route',params,request.signal);
+          return futureItem(label,data);
+        } catch (error) {
+          return futureItem(label,null,error.name === 'TimeoutError' ? '조회 시간이 초과됐어요.' : error.message);
+        }
+      }));
+      if (futureRequest === request) {
+        futureList.append(...items);
+        futureStatus.textContent = '카카오모빌리티 빠른 길 기준. 출발 시간에 따라 경로도 달라질 수 있어요.';
+      }
+    } finally {
+      if (futureRequest === request) {
+        futureRequest = null;
+        future.disabled = false;
+      }
+    }
+  });
+
   gpsButton.addEventListener('click',focusGps);
   drive.addEventListener('click',startDrive);
   summaryDrive.addEventListener('click',startDrive);
@@ -409,15 +641,18 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   const seoul = find('routeSeoul');
   const ulsan = find('routeUlsan');
   function searchTrip(origin,destination) {
-    for (const [id,query] of [['start',origin],['via',''],['end',destination]]) {
+    for (const waypoint of waypoints) {
+      cancelLookup(waypoint);
+      waypoint.row.remove();
+    }
+    waypoints.length = 0;
+    updateWaypoints();
+    for (const [id,query] of [['start',origin],['end',destination]]) {
       const slot = slots[id];
       cancelLookup(slot);
       slot.place = null;
       slot.input.value = query;
     }
-    slots.via.row.hidden = true;
-    viaButton.setAttribute('aria-expanded','false');
-    viaButton.textContent = '경유지 추가';
     clearResults();
     status.textContent = '출발지와 도착지의 검색 결과를 선택해 주세요.';
     searchPlace(slots.start);
@@ -432,7 +667,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     seoul.disabled = false;
     ulsan.disabled = false;
     if (!gpsPending) status.textContent = '장소를 검색하거나 현재 위치를 출발지로 지정해 주세요.';
-    for (const slot of Object.values(slots)) if (slot.input.value && !slot.place) searchPlace(slot);
+    for (const slot of tripSlots()) if (slot.input.value && !slot.place) searchPlace(slot);
   });
   return {
     focusGps,
@@ -441,6 +676,22 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
       choosePlace(slots[slot],place,false);
       const other = slots[slot === 'start' ? 'end' : 'start'];
       (other.place ? compare : other.input).focus({preventScroll:true});
+    },
+    async rerouteFrom(position,{passedWaypoints=0,waypoints:remaining,signal}={}) {
+      if (!selectedRoute) throw Error('다시 계산할 경로가 없어요.');
+      const {kind,tripLabel,destination,waypoints:stops} = selectedRoute;
+      const nextStops = remaining ?? stops.slice(passedWaypoints);
+      const params = tripParams(position,destination,nextStops);
+      if (kind === 'free') params.set('avoidTolls','true');
+      const data = await requestRoute('/api/routes',params,signal);
+      const route = kind === 'free'
+        ? data.routes?.find(candidate=>candidate.summary?.fare?.toll === 0)
+        : data.routes?.[0];
+      const next = route && navigationRoute(route,{
+        kind,name:'다시 계산한 경로',tripLabel,origin:position,destination,waypoints:nextStops
+      });
+      if (!next) throw Error('현재 위치에서 목적지까지 유효한 경로를 찾지 못했어요.');
+      return next;
     },
     routeSummary:() => selectedRoute
       ? selectedRoute.name+', '+formatDistance(selectedRoute.distanceMeters)+', '+formatDuration(selectedRoute.durationSeconds)+' 예상이에요.'

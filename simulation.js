@@ -73,6 +73,8 @@ export function createDrive(route, {testSignalStops = true} = {}) {
     name:route.tripLabel || route.name || '선택한 도로 경로',
     path,
     points:path.map(({lat,lng}) => ({lat,lng})),
+    sections:route.sections,
+    destination:route.destination,
     distanceMeters:Number.isFinite(route.distanceMeters) && route.distanceMeters>0 ? route.distanceMeters : distance,
     checkpoints, movingSeconds, totalSeconds:movingSeconds+totalWait
   };
@@ -136,7 +138,7 @@ function formatTime(seconds) {
   return minutes ? minutes+'분 '+rounded%60+'초' : rounded+'초';
 }
 
-export function initSimulation({map,openPanel,nextSignal}) {
+export function initSimulation({map,openPanel,nextSignal,navigation}) {
   const content = document.getElementById('simulationContent');
   const dock = document.getElementById('playback');
   content.innerHTML = `
@@ -207,6 +209,9 @@ export function initSimulation({map,openPanel,nextSignal}) {
     if (!drive) return;
     const snapshot = sampleDrive(drive,clock.reading(now));
     const arrived = snapshot.stage==='arrived';
+    navigation.update('simulation',snapshot.progress,{
+      seconds:drive.totalSeconds-snapshot.elapsed,arrived,announce:!offlineRun && clock.playing,elapsed:snapshot.elapsed
+    });
     if (arrived) clock.pause(now);
     if (!offlineRun) {
       if (arrived) nextSignal.stop('simulation');
@@ -265,6 +270,7 @@ export function initSimulation({map,openPanel,nextSignal}) {
     if (!offline) {
       signalRouteLength = nextSignal.start('simulation', drive, dock);
     }
+    navigation.start('simulation',drive,dock);
     tick();
     return true;
   }
@@ -276,6 +282,7 @@ export function initSimulation({map,openPanel,nextSignal}) {
     cancelAnimationFrame(frame);
     frame = 0;
     nextSignal.stop('simulation');
+    navigation.stop('simulation');
     drive = clock = null;
     dock.hidden = true;
     stats.hidden = true;
@@ -304,6 +311,7 @@ export function initSimulation({map,openPanel,nextSignal}) {
     cancelAnimationFrame(frame);
     clock.reset();
     if (arrived && !offlineRun) signalRouteLength = nextSignal.start('simulation', drive, dock);
+    navigation.start('simulation',drive,dock);
     if (resume) clock.play(now);
     tick();
   };

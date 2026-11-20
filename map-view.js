@@ -168,6 +168,7 @@ export function createMap(preview) {
   const retry = document.getElementById('retryMap');
   const zoomControls = document.querySelector('.map-zoom');
   const switchButton = document.getElementById('mapSwitch');
+  const trafficButton = document.getElementById('mapTrafficToggle');
   const workspace = document.getElementById('workspace');
   const offline = offlineMap(canvas,preview);
   const listeners = [];
@@ -175,6 +176,7 @@ export function createMap(preview) {
   let routeLine, routeMarkers = [], observedMarker, gpsMarker, simulatedMarker, nextSignalMarker;
   let placeMarkers = [];
   let followingGps = false;
+  let trafficEnabled = false;
 
   new ResizeObserver(() => {
     if (liveMode) instance.relayout();
@@ -188,6 +190,7 @@ export function createMap(preview) {
     credit.hidden = !exampleMode;
     placeholder.hidden = liveMode || exampleMode;
     zoomControls.hidden = !liveMode && !exampleMode;
+    if (trafficButton) trafficButton.disabled = !liveMode || sdk.MapTypeId?.TRAFFIC == null;
     document.getElementById('mapMode').textContent = exampleMode ? '오프라인 예시' : '카카오 지도';
     switchButton.hidden = !exampleMode || !instance;
     workspace.classList.toggle('map-live',liveMode);
@@ -218,6 +221,14 @@ export function createMap(preview) {
   document.getElementById('zoomIn').onclick = ()=>zoom(1);
   document.getElementById('zoomOut').onclick = ()=>zoom(-1);
   switchButton.onclick = ()=>chooseMode('live');
+  if (trafficButton) trafficButton.onclick = ()=>{
+    if (trafficButton.disabled) return;
+    const traffic = sdk.MapTypeId.TRAFFIC;
+    if (trafficEnabled) instance.removeOverlayMapTypeId(traffic);
+    else instance.addOverlayMapTypeId(traffic);
+    trafficEnabled = !trafficEnabled;
+    trafficButton.setAttribute('aria-pressed',String(trafficEnabled));
+  };
   chooseMode('pending');
 
   function setConnectionStatus(message, retryable = false) {

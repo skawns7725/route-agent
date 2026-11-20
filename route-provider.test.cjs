@@ -94,3 +94,57 @@ test('rejects invalid coordinates and reports a missing server credential withou
   assert.equal((await request('/api/route-comparison')).status,503);
   assert.equal(mockedFetch.mock.callCount(),0);
 });
+
+test('preserves the order of five waypoints and rejects unsupported lists',async t => {
+  setKey(t,'test-rest-key');
+  const coords = ['127.42,36.34','127.43,36.34','127.44,36.34','127.45,36.34','127.46,36.34'];
+  const params = new URLSearchParams({origin,destination});
+  for (const point of coords) params.append('via',point);
+  const upstream = t.mock.method(globalThis,'fetch',async address => {
+    assert.equal(new URL(address).searchParams.get('waypoints'),coords.join('|'));
+    return Response.json({routes:[route(120,4000,0,[[4000,4]])]});
+  });
+  assert.equal((await request('/api/route-comparison',params)).status,200);
+  assert.equal(upstream.mock.callCount(),4);
+  assert.equal((await request('/api/routes',new URLSearchParams({origin,destination,via:coords.join('|')}))).status,200);
+  params.append('via','127.47,36.34');
+  assert.equal((await request('/api/route-comparison',params)).status,400);
+  assert.equal((await request('/api/routes',new URLSearchParams({origin,destination,via:'127.42,36.34|0,0'}))).status,400);
+  assert.equal(upstream.mock.callCount(),5);
+});
+
+test('fetches a future summary with the requested departure time in Korea and no route geometry',async t => {
+  setKey(t,'test-rest-key');
+  t.mock.method(Date,'now',() => Date.parse('2026-11-20T14:45:52Z'));
+  const expectedDepartures = ['202611210015','202611210045'];
+  const upstream = t.mock.method(globalThis,'fetch',async (address,{headers}) => {
+    const url = new URL(address);
+    assert.equal(url.pathname,'/v1/future/directions');
+    assert.equal(url.searchParams.get('departure_time'),expectedDepartures.shift());
+    assert.equal(url.searchParams.get('waypoints'),via);
+    assert.equal(url.searchParams.get('priority'),'TIME');
+    assert.equal(url.searchParams.get('alternatives'),'false');
+    assert.equal(url.searchParams.get('summary'),'true');
+    assert.equal(headers.Authorization,'KakaoAK test-rest-key');
+    return Response.json({routes:[null,{result_code:0,summary:{duration:840,distance:4000}}]});
+  });
+  const params = new URLSearchParams(trip);
+  params.set('minutes','30');
+  const result = await request('/api/future-route',params);
+  assert.equal(result.status,200);
+  assert.equal(result.body.departureAt,'2026-11-20T15:15:00.000Z');
+  assert.equal(result.body.durationSeconds,840);
+  assert.equal(result.body.distanceMeters,4000);
+  assert.ok(Number.isFinite(Date.parse(result.body.fetchedAt)));
+
+  params.set('minutes','60');
+  const later = await request('/api/future-route',params);
+  assert.equal(later.status,200);
+  assert.equal(later.body.departureAt,'2026-11-20T15:45:00.000Z');
+
+  params.set('minutes','-30');
+  assert.equal((await request('/api/future-route',params)).status,400);
+  params.delete('minutes');
+  assert.equal((await request('/api/future-route',params)).status,400);
+  assert.equal(upstream.mock.callCount(),2);
+});

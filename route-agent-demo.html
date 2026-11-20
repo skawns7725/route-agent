@@ -32,6 +32,7 @@
         <div><span id="mapMode">카카오 지도</span><small id="tileState" role="status">지도 연결 확인 중</small></div>
       </div>
       <button id="mapSwitch" class="map-action" type="button" hidden>카카오 지도</button>
+      <button id="mapTrafficToggle" class="map-action" type="button" aria-pressed="false" disabled>교통</button>
       <button id="gpsButton" class="map-action gps" type="button"><span aria-hidden="true">⌖</span> <span>GPS 시작</span></button>
     </header>
     <div id="mapSearch" class="map-search" role="search" aria-label="지도 장소 검색">
@@ -93,7 +94,7 @@
         <p class="source"><span id="signalSourceNote"></span> <a id="signalSource" target="_blank" rel="noopener noreferrer">원본 데이터</a></p>
       </section>
       <section id="drivingPanel" data-view="driving" aria-labelledby="drivingTitle" hidden>
-        <div class="panel-heading"><span class="panel-icon" aria-hidden="true">⌖</span><div><h1 id="drivingTitle" tabindex="-1">실제 GPS 주행</h1><p>카카오 경로 위에 현재 위치를 표시합니다.</p></div></div>
+        <div class="panel-heading"><span class="panel-icon" aria-hidden="true">⌖</span><div><h1 id="drivingTitle" tabindex="-1">실제 GPS 주행</h1><p>경로를 다시 찾을 때 현재 위치를 카카오모빌리티에 전달해요.</p></div></div>
         <div id="drivingContent"></div>
       </section>
       <section id="simulationPanel" data-view="simulation" aria-labelledby="simulationTitle" hidden>
@@ -102,6 +103,13 @@
       </section>
       <section id="voicePanel" data-view="voice" aria-labelledby="voiceTitle" hidden>
         <div class="panel-heading"><span class="panel-icon voice" aria-hidden="true">◉</span><div><h1 id="voiceTitle" tabindex="-1">음성 안내</h1><p>선택한 경로의 요약을 들을 수 있습니다.</p></div></div>
+        <div class="voice-settings">
+          <label><input id="voiceEnabled" type="checkbox"> 주행 중 다음 방향 읽기</label>
+          <label class="field" for="voiceVolume">음량 <output id="voiceVolumeValue" for="voiceVolume">80%</output>
+            <input id="voiceVolume" type="range" min="0" max="100" value="80">
+          </label>
+          <button id="voicePreview" class="secondary" type="button">음성 테스트</button>
+        </div>
         <button id="readRoute" class="primary" type="button">선택한 경로 읽기</button>
         <button id="mic" class="secondary" type="button" aria-pressed="false">마이크로 말하기</button>
         <form id="voiceForm" class="voice-form">
@@ -112,6 +120,17 @@
       </section>
     </aside>
 
+    <section id="navigationGuide" class="navigation-guide" aria-label="주행 방향 안내" hidden>
+      <div class="navigation-guide-row">
+        <strong role="status" aria-atomic="true"></strong>
+        <b data-guide-distance></b>
+      </div>
+      <p data-guide-road></p>
+      <p data-guide-stats></p>
+      <p data-guide-branches></p>
+      <button data-guide-parking class="secondary" type="button" hidden>목적지 근처 주차장</button>
+      <details data-guide-list hidden><summary>전체 방향 안내</summary><ol></ol></details>
+    </section>
     <aside id="nextSignal" class="next-signal" aria-label="다음 교차로 신호" hidden>
       <div class="next-signal-heading">
         <span class="next-signal-icon" aria-hidden="true">🚦</span>

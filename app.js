@@ -5,6 +5,7 @@ import {exampleRoute, initSimulation} from './simulation.js';
 import {initDriving} from './driving.mjs';
 import {initNextSignal} from './next-signal.mjs';
 import {initPlaceSearch} from './place-search.mjs';
+import {initNavigationGuide} from './navigation-guide.mjs';
 
 const el = id=>document.getElementById(id);
 const workspace = el('workspace');
@@ -49,16 +50,24 @@ function openPanel(name, {playing = false} = {}) {
 }
 const closePanel = ()=>setPanel(null);
 const nextSignal = initNextSignal({map,card:el('nextSignal')});
-const simulation = initSimulation({map,openPanel,nextSignal});
-const driving = initDriving({map,openPanel,nextSignal});
+const navigation = initNavigationGuide({
+  card:el('navigationGuide'),speak:text=>el('voiceEnabled').checked && say(text),
+  searchParking:destination=>placeSearch.searchParking(destination)
+});
+const simulation = initSimulation({map,openPanel,nextSignal,navigation});
+const driving = initDriving({
+  map,openPanel,nextSignal,navigation,
+  rerouteFrom:(position,options)=>routing.rerouteFrom(position,options)
+});
 const routing = initRouting({
   map,openPanel,startDrive:driving.start,startSimulation:simulation.playRoadRoute,
+  searchParking:destination=>placeSearch.searchParking(destination),
   setRoadRoute(route) {
     driving.setRoute(route);
     simulation.setRoadRoute(route);
   }
 });
-initPlaceSearch({
+const placeSearch = initPlaceSearch({
   map,
   chooseRoutePlace:routing.chooseMapPlace,
   onSearch() {if (compact.matches) setPanel(null,false);}
@@ -96,14 +105,36 @@ dockLayout.observe(drivingDock);
 
 const speech = window.speechSynthesis;
 const mic = el('mic');
+const voiceEnabled = el('voiceEnabled');
+const voiceVolume = el('voiceVolume');
+let utterance;
 function say(text) {
-  el('voiceStatus').textContent = text;
-  if (!speech || !window.SpeechSynthesisUtterance) return;
+  const status = el('voiceStatus');
+  status.textContent = text;
+  if (!speech || !window.SpeechSynthesisUtterance) {
+    status.textContent = '이 브라우저에서는 음성 재생을 사용할 수 없어요.';
+    return false;
+  }
   const voice = new SpeechSynthesisUtterance(text);
   voice.lang = 'ko-KR';
+  voice.volume = Number(voiceVolume.value) / 100;
+  utterance = voice;
+  voice.onerror = ()=>{
+    if (utterance === voice) status.textContent = '음성을 재생할 수 없어요. 기기 음성 설정을 확인해 주세요.';
+  };
   speech.cancel();
   speech.speak(voice);
+  return true;
 }
+voiceEnabled.onchange = ()=>{
+  if (!voiceEnabled.checked) {
+    utterance = null;
+    speech?.cancel();
+  }
+  el('voiceStatus').textContent = voiceEnabled.checked ? '주행 음성 안내 켜짐' : '주행 음성 안내 꺼짐';
+};
+voiceVolume.oninput = ()=>{el('voiceVolumeValue').value = voiceVolume.value+'%';};
+el('voicePreview').onclick = ()=>say('삼백 미터 앞에서 좌회전하세요.');
 function readRoute() {
   say(routing.routeSummary() || '경로 패널에서 출발지와 도착지를 선택하고 경로를 조회해 주세요.');
 }

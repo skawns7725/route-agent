@@ -5,10 +5,10 @@ const {handleTrafficSignals} = require('./traffic-signals.cjs');
 const {handleRoutes} = require('./route-provider.cjs');
 
 const signalPaths = new Set(['/api/intersections','/api/traffic-signals','/api/traffic-light-facilities']);
-const routePaths = new Set(['/api/routes','/api/route-comparison']);
+const routePaths = new Set(['/api/routes','/api/route-comparison','/api/future-route']);
 const assets = new Map([
   ['/','route-agent-demo.html'], ['/route-agent-demo.html','route-agent-demo.html'],
-  ...['app.js','map-view.js','signals.js','simulation.js','routing.js','driving.mjs','next-signal.mjs','place-search.mjs','map.css'].map(name=>['/'+name,name])
+  ...['app.js','map-view.js','signals.js','simulation.js','routing.js','driving.mjs','next-signal.mjs','navigation-guide.mjs','place-search.mjs','saved-places.mjs','map.css'].map(name=>['/'+name,name])
 ]);
 const types = {'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css'};
 
