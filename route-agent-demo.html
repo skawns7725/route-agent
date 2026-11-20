@@ -16,13 +16,13 @@
       <div><strong>카카오 지도</strong><p id="mapPlaceholderStatus">지도 연결 확인 중</p><button id="retryMap" class="secondary" type="button" hidden>다시 연결</button></div>
     </div>
     <aside id="rail" class="rail" aria-label="도구">
-      <div class="rail-brand"><span class="brand-mark" aria-hidden="true">➤</span><span class="rail-name">가는 길에</span></div>
-      <button id="railToggle" class="rail-toggle" type="button" aria-expanded="false" aria-label="사이드바 펼치기" title="사이드바 펼치기"><span aria-hidden="true">☰</span><span class="rail-name">접기</span></button>
+      <div class="rail-brand"><span class="brand-mark" aria-hidden="true">➤</span></div>
       <nav aria-label="지도 도구">
-        <button type="button" data-panel="route" aria-controls="routePanel" aria-expanded="false" title="경로"><span class="rail-icon" aria-hidden="true">↗</span><span class="rail-name">경로</span></button>
-        <button type="button" data-panel="signals" aria-controls="signalsPanel" aria-expanded="false" title="실제 신호"><span class="rail-icon icon-signal" aria-hidden="true"><i></i></span><span class="rail-name">실제 신호</span></button>
-        <button type="button" data-panel="simulation" aria-controls="simulationPanel" aria-expanded="false" title="모의 주행"><span class="rail-icon" aria-hidden="true">▷</span><span class="rail-name">모의 주행</span></button>
-        <button type="button" data-panel="voice" aria-controls="voicePanel" aria-expanded="false" title="음성 안내"><span class="rail-icon icon-voice" aria-hidden="true"><i></i></span><span class="rail-name">음성 안내</span></button>
+        <button type="button" data-panel="route" aria-controls="routePanel" aria-expanded="false" title="경로"><span class="rail-icon" aria-hidden="true">↗</span></button>
+        <button type="button" data-panel="signals" aria-controls="signalsPanel" aria-expanded="false" title="실제 신호"><span class="rail-icon icon-signal" aria-hidden="true"><i></i></span></button>
+        <button type="button" data-panel="simulation" aria-controls="simulationPanel" aria-expanded="false" title="모의 주행"><span class="rail-icon" aria-hidden="true">▷</span></button>
+        <button type="button" data-panel="voice" aria-controls="voicePanel" aria-expanded="false" title="음성 명령"><span class="rail-icon icon-voice" aria-hidden="true"><i></i></span></button>
+        <button type="button" data-panel="settings" aria-controls="settingsPanel" aria-expanded="false" title="설정"><span class="rail-icon" aria-hidden="true">⚙</span></button>
       </nav>
     </aside>
 
@@ -32,7 +32,6 @@
         <div><span id="mapMode">카카오 지도</span><small id="tileState" role="status">지도 연결 확인 중</small></div>
       </div>
       <button id="mapSwitch" class="map-action" type="button" hidden>카카오 지도</button>
-      <button id="mapTrafficToggle" class="map-action" type="button" aria-pressed="false" disabled>교통</button>
       <button id="gpsButton" class="map-action gps" type="button"><span aria-hidden="true">⌖</span> <span>GPS 시작</span></button>
     </header>
     <div id="mapSearch" class="map-search" role="search" aria-label="지도 장소 검색">
@@ -102,14 +101,7 @@
         <div id="simulationContent"></div>
       </section>
       <section id="voicePanel" data-view="voice" aria-labelledby="voiceTitle" hidden>
-        <div class="panel-heading"><span class="panel-icon voice" aria-hidden="true">◉</span><div><h1 id="voiceTitle" tabindex="-1">음성 안내</h1><p>선택한 경로의 요약을 들을 수 있습니다.</p></div></div>
-        <div class="voice-settings">
-          <label><input id="voiceEnabled" type="checkbox"> 주행 중 다음 방향 읽기</label>
-          <label class="field" for="voiceVolume">음량 <output id="voiceVolumeValue" for="voiceVolume">80%</output>
-            <input id="voiceVolume" type="range" min="0" max="100" value="80">
-          </label>
-          <button id="voicePreview" class="secondary" type="button">음성 테스트</button>
-        </div>
+        <div class="panel-heading"><span class="panel-icon voice" aria-hidden="true">◉</span><div><h1 id="voiceTitle" tabindex="-1">음성 명령</h1><p>선택한 경로의 요약을 들을 수 있습니다.</p></div></div>
         <button id="readRoute" class="primary" type="button">선택한 경로 읽기</button>
         <button id="mic" class="secondary" type="button" aria-pressed="false">마이크로 말하기</button>
         <form id="voiceForm" class="voice-form">
@@ -117,6 +109,53 @@
           <button class="secondary" type="submit">보내기</button>
         </form>
         <p id="voiceStatus" class="status" role="status"></p>
+      </section>
+      <section id="settingsPanel" data-view="settings" aria-labelledby="settingsTitle" hidden>
+        <div class="panel-heading"><span class="panel-icon" aria-hidden="true">⚙</span><div><h1 id="settingsTitle" tabindex="-1">설정</h1><p>이 브라우저에 저장돼요.</p></div></div>
+        <fieldset class="settings-group">
+          <legend>음성</legend>
+          <label class="settings-check"><input id="voiceEnabled" type="checkbox"> 주행 음성 안내</label>
+          <label class="field">음량 <output id="voiceVolumeValue" for="voiceVolume">80%</output>
+            <input id="voiceVolume" type="range" min="0" max="100" value="80">
+          </label>
+          <button id="voicePreview" class="secondary" type="button">음성 테스트</button>
+          <p id="settingsVoiceStatus" class="status" role="status"></p>
+        </fieldset>
+        <fieldset class="settings-group">
+          <legend>지도</legend>
+          <label class="field">지도 종류
+            <select id="settingsMapType"><option value="road">일반 지도</option><option value="hybrid">위성 지도와 지명</option></select>
+          </label>
+          <button id="mapTrafficToggle" class="secondary" type="button" aria-pressed="false" disabled>교통 레이어</button>
+        </fieldset>
+        <fieldset class="settings-group">
+          <legend>경로</legend>
+          <label class="field">경로 비교 기본 선택
+            <select id="settingsRoute">
+              <option value="fast">빠른 길</option><option value="short">짧은 길</option>
+              <option value="traffic">정체 적은 길</option><option value="free">무료도로</option>
+            </select>
+          </label>
+          <p class="muted">다음 경로 비교부터 적용해요.</p>
+        </fieldset>
+        <fieldset class="settings-group">
+          <legend>차량 정보</legend>
+          <label class="field">차량 이름 <input id="settingsVehicleName" maxlength="40" autocomplete="off"></label>
+          <label class="field">연료
+            <select id="settingsFuel">
+              <option value="">선택 안 함</option><option value="gas">휘발유</option><option value="diesel">경유</option>
+              <option value="lpg">LPG</option><option value="hybrid">하이브리드</option><option value="ev">전기</option>
+              <option value="other">기타</option>
+            </select>
+          </label>
+        </fieldset>
+        <fieldset class="settings-group">
+          <legend>주행 알림</legend>
+          <label class="settings-check"><input id="settingsSignalAlert" type="checkbox" checked> 전방 교차로 신호 카드</label>
+          <label class="settings-check"><input id="settingsArrivalAlert" type="checkbox" checked> 목적지 도착 음성</label>
+          <p class="muted">도착 음성은 주행 음성 안내가 켜져 있을 때 재생돼요.</p>
+        </fieldset>
+        <p id="settingsStatus" class="status" role="status"></p>
       </section>
     </aside>
 
