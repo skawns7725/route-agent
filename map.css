@@ -369,8 +369,6 @@ button { text-align: center; }
 #route-end .field span { color: var(--accent); }
 .route-modes {
   display: grid;
-  grid-template-columns: repeat(4,minmax(0,1fr));
-  gap: 5px;
   margin-top: 12px;
 }
 .route-modes button {
@@ -388,7 +386,6 @@ button { text-align: center; }
 }
 .route-modes button span { font-size: 19px; line-height: 1.1; }
 .route-modes button[aria-pressed="true"] { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-hover); font-weight: 800; }
-.route-modes button:disabled span { filter: grayscale(1); }
 .route-search-history {
   margin-top: 6px;
   padding: 8px 10px;

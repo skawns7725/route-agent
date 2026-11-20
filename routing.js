@@ -77,9 +77,6 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
       <div class="route-fields" id="routeFields"></div>
       <div class="route-modes" role="group" aria-label="이동 수단">
         <button type="button" aria-pressed="true"><span aria-hidden="true">🚘</span>자동차</button>
-        <button type="button" disabled><span aria-hidden="true">🚇</span>대중교통</button>
-        <button type="button" disabled><span aria-hidden="true">🚶</span>도보</button>
-        <button type="button" disabled><span aria-hidden="true">🚲</span>자전거</button>
       </div>
       <div class="route-toolbar inline-actions">
         <button class="secondary" id="routeSeoul" type="button" disabled>서울시청 → 서울역 검색</button>
