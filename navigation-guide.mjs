@@ -57,15 +57,27 @@ export function readNavigation(plan,progress,secondsRemaining,estimatedAt) {
 }
 
 const metersText = meters=>meters >= 1000 ? (meters/1000).toFixed(1)+' km' : Math.round(meters)+' m';
-const minutesText = seconds=>seconds === 0 ? '0분' : seconds < 60 ? '1분 미만' : '약 '+Math.ceil(seconds/60)+'분';
+const tripDistance = meters=>metersText(meters).replace(' ','');
+const minutesText = seconds=>seconds > 0 && seconds < 60 ? '1분 미만' : Math.ceil(seconds/60)+'분';
+
+export function directionArrow(instruction) {
+  if (/유턴|U턴/i.test(instruction)) return '↶';
+  if (/좌회전|왼쪽|좌측/.test(instruction)) return '↰';
+  if (/우회전|오른쪽|우측/.test(instruction)) return '↱';
+  if (/직진/.test(instruction)) return '↑';
+  return '';
+}
+
 const arrivalClock = new Intl.DateTimeFormat('ko-KR',{hour:'numeric',minute:'2-digit'});
 
-export function initNavigationGuide({card,speak,searchParking}) {
+export function initNavigationGuide({card,trip,speak,searchParking}) {
   const turn = card.querySelector('strong');
   const distance = card.querySelector('[data-guide-distance]');
   const road = card.querySelector('[data-guide-road]');
-  const stats = card.querySelector('[data-guide-stats]');
-  const etaRow = card.querySelector('[data-guide-eta-row]');
+  const direction = card.querySelector('[data-guide-direction]');
+  const arrow = direction.querySelector('[data-guide-arrow]');
+  const stats = trip.querySelector('[data-guide-stats]');
+  const etaRow = trip.querySelector('[data-guide-eta-row]');
   const eta = etaRow.querySelector('time');
   const branches = card.querySelector('[data-guide-branches]');
   const parking = card.querySelector('[data-guide-parking]');
@@ -74,6 +86,11 @@ export function initNavigationGuide({card,speak,searchParking}) {
   let session;
   function text(node,value) {
     if (node.textContent !== value) node.textContent = value;
+  }
+  function showDirection(instruction) {
+    const symbol = directionArrow(instruction);
+    direction.hidden = !symbol;
+    text(arrow,symbol);
   }
   function showArrivalTime(timestamp) {
     etaRow.hidden = timestamp === null;
@@ -93,6 +110,7 @@ export function initNavigationGuide({card,speak,searchParking}) {
     if (session?.owner !== owner) return;
     session = null;
     card.hidden = true;
+    trip.hidden = true;
   }
   parking.onclick = ()=>{if (session?.destination) searchParking(session.destination,parking);};
   return {
@@ -106,6 +124,8 @@ export function initNavigationGuide({card,speak,searchParking}) {
       text(road,'');
       text(stats,'');
       text(branches,'');
+      trip.hidden = true;
+      showDirection('');
       parking.hidden = !session.destination;
       showArrivalTime(null);
       list.hidden = session.plan.steps.length === 0;
@@ -123,6 +143,8 @@ export function initNavigationGuide({card,speak,searchParking}) {
       if (progress === null) {
         text(turn,'경로 위 현재 위치를 확인하고 있어요.');
         for (const node of [distance,road,stats,branches]) text(node,'');
+        trip.hidden = true;
+        showDirection('');
         showArrivalTime(null);
         return;
       }
@@ -137,20 +159,22 @@ export function initNavigationGuide({card,speak,searchParking}) {
         session.highlight = index;
       }
       text(turn,arrived ? '목적지 도착' : step?.text || '다음 방향 정보 없음');
-      text(distance,step ? metersText(stepDistance) : '');
-      text(road,step?.road || '');
+      text(distance,step && !arrived ? tripDistance(stepDistance) : '');
+      text(road,arrived ? '' : step?.road || '');
+      showDirection(arrived ? '' : step?.text || '');
+      trip.hidden = false;
       const upcoming = state.junctions.filter(item=>item !== step);
       text(branches,arrived || !upcoming.length ? '' : '이어지는 분기 · '+upcoming
         .map(item=>[item.text,item.road].filter(Boolean).join(' ')).join(' → '));
       if (arrived) {
         showArrivalTime(null);
-        text(stats,[metersText(distanceTraveled ?? session.plan.distance),Number.isFinite(elapsed) ? minutesText(elapsed) : '']
+        text(stats,[tripDistance(distanceTraveled ?? session.plan.distance),Number.isFinite(elapsed) ? minutesText(elapsed) : '']
           .filter(Boolean).join(' · '));
         if (announce && !session.arrivalAnnounced && speak('목적지에 도착했습니다.')) session.arrivalAnnounced = true;
         return;
       }
-      text(stats,'남은 '+metersText(state.remaining)+
-        (state.seconds === null ? '' : ' · '+minutesText(state.seconds)));
+      text(stats,[state.seconds === null ? '' : minutesText(state.seconds),tripDistance(state.remaining)]
+        .filter(Boolean).join(', '));
       showArrivalTime(state.arrivalAt);
       if (announce && step && stepDistance <= (step.type === arrival ? 500 : 300) &&
           session.lastAnnouncement !== state.index &&

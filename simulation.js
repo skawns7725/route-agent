@@ -3,6 +3,7 @@ import {metersBetween} from './gps-departure.mjs';
 export const exampleRoute = {
   name: '용운동 → 충남대',
   durationSeconds: 88,
+  exampleSpeedLimit: 80,
   points: [
     [36.328,127.453], [36.330,127.444], [36.337,127.438], [36.337,127.426],
     [36.345,127.418], [36.345,127.401], [36.355,127.391], [36.355,127.375],
@@ -71,6 +72,7 @@ export function createDrive(route, {testSignalStops = true} = {}) {
     sections:route.sections,
     destination:route.destination,
     distanceMeters:Number.isFinite(route.distanceMeters) && route.distanceMeters>0 ? route.distanceMeters : distance,
+    exampleSpeedLimit:testSignalStops ? route.exampleSpeedLimit : undefined,
     checkpoints, movingSeconds, totalSeconds:movingSeconds+totalWait
   };
 }

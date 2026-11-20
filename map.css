@@ -18,6 +18,7 @@
   --accent: #7C3AED;
   --accent-soft: #ede5ff;
   --on-accent: #fff;
+  --speed-limit-ring: #c53544;
   --map-ground: #dfe9f0;
   --map-park: #c9e4d9;
   --map-park-alt: #bedccc;
@@ -66,6 +67,7 @@
   --accent: #bd9aff;
   --accent-soft: #32254b;
   --on-accent: #0b0f1a;
+  --speed-limit-ring: #ff767f;
   --map-ground: #192537;
   --map-park: #203b37;
   --map-park-alt: #24433c;
@@ -500,10 +502,8 @@ button { text-align: center; }
 .playback-stats { color: var(--muted); font-size: 12px; }
 .playback-progress { width: 100%; height: 6px; accent-color: var(--primary); }
 .navigation-guide { margin-bottom: 8px; padding: 9px 11px; border-radius: 10px; background: var(--primary-soft); color: var(--ink); }
-.navigation-guide-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.navigation-guide-row > b { white-space: nowrap; font-size: 13px; }
 .navigation-guide p { margin-top: 3px; font-size: 12px; color: var(--muted); }
-.navigation-guide p:empty, .navigation-guide b:empty { display: none; }
+.navigation-guide :is(p, b):empty { display: none; }
 .navigation-guide > button { margin-top: 6px; }
 .navigation-guide details { margin-top: 4px; font-size: 12px; }
 .navigation-guide summary { min-height: 28px; align-content: center; cursor: pointer; }
@@ -625,19 +625,74 @@ button { text-align: center; }
   max-height: calc(62dvh - 12px - env(safe-area-inset-top));
   overflow: auto;
 }
-.navigation-cards :is(.navigation-guide, .next-signal, .navigation-no-signal), .navigation-controls {
+.navigation-cards :is(.navigation-guide, .navigation-speedometer, .next-signal, .navigation-no-signal), .navigation-controls {
   margin: 0;
   padding: 12px 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
   color: var(--ink);
+  box-shadow: var(--shadow);
 }
-.navigation-cards .navigation-guide { order: -1; }
-.navigation-cards .navigation-guide-row > strong { font-size: clamp(19px, 4vw, 27px); }
-.navigation-cards .navigation-guide-row > b { font-size: clamp(17px, 4vw, 22px); }
+.navigation-cards .navigation-guide { order: -1; border-top: 4px solid var(--primary); }
+.navigation-guide-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  font-size: clamp(24px, 6vw, 34px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.navigation-guide-row > b { color: var(--primary-hover); white-space: nowrap; font-weight: 850; }
+.navigation-guide-row > strong { font-weight: 850; }
+.navigation-cards [data-guide-road] {
+  font-size: clamp(18px, 4.5vw, 24px);
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+.navigation-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 5px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+.navigation-direction [data-guide-arrow] { font-size: 34px; line-height: 1; }
 .navigation-cards [data-guide-branches] { display: none; }
-.navigation-cards :is([data-guide-road], [data-guide-stats], [data-guide-eta-row]) { color: var(--muted); font-size: 15px; }
+.navigation-speedometer {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 5vw, 28px);
+  font-variant-numeric: tabular-nums;
+}
+.navigation-speed-limit {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.navigation-speed-limit strong {
+  display: grid;
+  place-items: center;
+  min-width: 52px;
+  aspect-ratio: 1;
+  padding: 2px;
+  border: 4px solid var(--speed-limit-ring);
+  border-radius: 50%;
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1;
+}
+.navigation-speed-reading [data-navigation-source] { display: block; color: var(--muted); font-size: 12px; }
+.navigation-speed-reading strong { font-size: clamp(36px, 10vw, 48px); font-weight: 850; line-height: 1; }
+.navigation-speed-unit { color: var(--muted); font-size: 14px; font-weight: 700; }
 .navigation-cards .navigation-guide summary { min-height: 36px; }
 .navigation-cards .next-signal :is(p, span), .navigation-no-signal { color: var(--muted); }
 .navigation-cards .next-signal li { background: var(--surface-muted); border-color: var(--line); }
@@ -653,13 +708,19 @@ button { text-align: center; }
   right: var(--navigation-edge);
   bottom: max(26px, calc(env(safe-area-inset-bottom) + 24px));
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  padding: 8px 10px;
 }
-.navigation-controls span { display: block; color: var(--muted); font-size: 11px; }
-.navigation-controls strong { font-size: clamp(15px, 4vw, 23px); white-space: nowrap; }
+.navigation-trip {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: clamp(17px, 4.6vw, 22px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  font-weight: 750;
+}
+.navigation-trip strong { color: var(--primary-hover); font-weight: 850; }
+.navigation-trip [data-guide-eta-row] { white-space: nowrap; }
 .navigation-controls button, .navigation-parking button, .navigation-cards [data-guide-parking] {
   min-height: 44px;
   padding: 6px 9px;
@@ -694,7 +755,7 @@ button { text-align: center; }
 .navigation-parking li { display: grid; gap: 3px; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
 .navigation-parking li span:empty { display: none; }
 @media (width < 860px) {
-  .navigation-parking { top: auto; bottom: calc(94px + env(safe-area-inset-bottom)); max-height: min(42dvh,360px); }
+  .navigation-parking { top: auto; bottom: calc(154px + env(safe-area-inset-bottom)); max-height: min(42dvh,360px); }
 }
 .sample-shortcut { position: absolute; right: 20px; bottom: 25px; z-index: 2; background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .sample-shortcut:not([hidden]) { display: none; }
