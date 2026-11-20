@@ -85,12 +85,14 @@ export function naverPlaceUrl({name,address}) {
   return 'https://map.naver.com/p/search/'+encodeURIComponent(query);
 }
 
-export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
+export function initPlaceSearch({map, chooseRoutePlace, recordSearch, showHistory, compareToPlace, onSearch}) {
   const el = id=>document.getElementById(id);
+  const search = el('mapSearch');
   const form = el('mapSearchForm');
   const input = el('mapSearchInput');
   const submit = el('mapSearchSubmit');
   const results = el('mapSearchResults');
+  const history = el('mapSearchHistory');
   const status = el('mapSearchStatus');
   const list = el('mapSearchList');
   const details = el('mapPlaceDetails');
@@ -99,7 +101,7 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
   const address = el('mapPlaceAddress');
   const phone = el('mapPlacePhone');
   const reviews = el('mapPlaceReviews');
-  let lookup, parkingLookup, selection, markers = [], generation = 0;
+  let lookup, parkingLookup, selection, parkingResults, searchTimer, markers = [], generation = 0;
   function hideDetails() {
     selection = null;
     details.hidden = true;
@@ -107,8 +109,11 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
   }
 
   function closeSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = undefined;
     generation++;
     hideDetails();
+    history.hidden = true;
     results.hidden = true;
     list.replaceChildren();
     map.showPlaceMarkers([]);
@@ -116,6 +121,7 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
 
   function select(index) {
     const place = markers[index];
+    if (!parkingResults) recordSearch(place);
     selection = index;
     results.hidden = true;
     title.textContent = place.name;
@@ -158,6 +164,7 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
     onSearch();
     closeSearch();
     const current = generation;
+    parkingResults = Boolean(parkingDestination);
     results.hidden = false;
     status.textContent = parkingDestination
       ? `${parkingDestination} 반경 1km에서 주차장을 찾고 있어요…`
@@ -181,6 +188,31 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
         : '장소를 가져오지 못했어요. 다시 검색해 주세요.';
     }
   }
+
+  function openHistory() {
+    if (input.value.trim() || !history.hidden || !results.hidden || !details.hidden) return;
+    showHistory(history,place=>{
+      closeSearch();
+      compareToPlace(place);
+    });
+    history.scrollTop = 0;
+    history.hidden = false;
+  }
+
+  input.addEventListener('focus',openHistory);
+  input.addEventListener('click',openHistory);
+  input.addEventListener('input',()=>{
+    closeSearch();
+    const query = input.value.trim();
+    if (!query) openHistory();
+    else searchTimer = setTimeout(()=>runLookup(()=>lookup(query)),250);
+  });
+  search.addEventListener('focusout',event=>{
+    if (event.relatedTarget && !search.contains(event.relatedTarget)) history.hidden = true;
+  });
+  document.addEventListener('pointerdown',event=>{
+    if (!search.contains(event.target)) history.hidden = true;
+  });
 
   form.onsubmit = event=>{
     event.preventDefault();
@@ -207,15 +239,18 @@ export function initPlaceSearch({map, chooseRoutePlace, onSearch}) {
       const place = markers[selection];
       if (!place) return;
       closeSearch();
-      chooseRoutePlace(slot,place,{fromSearch:true});
+      chooseRoutePlace(slot,place,{fromSearch:parkingResults});
     };
   }
-  el('mapSearch').addEventListener('keydown',event=>{
-    if (event.key !== 'Escape' || (results.hidden && details.hidden)) return;
+  search.addEventListener('keydown',event=>{
+    if (event.key !== 'Escape' || (history.hidden && results.hidden && details.hidden && !searchTimer)) return;
     event.preventDefault();
     event.stopPropagation();
     if (!details.hidden) el('mapPlaceBack').click();
-    else el('mapSearchDismiss').click();
+    else {
+      el('mapSearchDismiss').click();
+      history.hidden = true;
+    }
   });
   map.onReady(()=>{
     lookup = createPlaceLookup();

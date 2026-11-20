@@ -333,6 +333,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   }
 
   function renderHistory(slot,focusSelector) {
+    const pickPlace = slot.pickPlace || (place => pickHistoryPlace(slot,place));
     const book = readSavedPlaces(storage);
     const saved = [book.home,book.work,...book.favorites,...book.recent].filter(Boolean);
     const history = slot.history;
@@ -351,11 +352,11 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
 
     for (const [key,label] of [['home','집'],['work','회사']]) {
       const place = book[key];
-      const chip = actionButton(label,() => pickHistoryPlace(slot,place));
+      const chip = actionButton(label,() => pickPlace(place));
       chip.disabled = !place;
       chips.append(chip);
     }
-    if (saved.length) chips.append(actionButton('저장된 장소',() => openTab('places')));
+    if (slot.pickPlace || saved.length) chips.append(actionButton('저장된 장소',() => openTab('places')));
 
     for (const [key,label] of [['recent','최근검색'],['places','장소'],['routes','경로']]) {
       const tab = actionButton(label,() => openTab(key));
@@ -370,13 +371,16 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
         const key = coordinates(place);
         if (unique.has(key)) continue;
         unique.add(key);
-        content.append(actionButton(place.name,() => pickHistoryPlace(slot,place)));
+        content.append(actionButton(place.name,() => pickPlace(place)));
       }
       if (!saved.length) content.textContent = '저장된 장소가 없어요.';
     } else if (slot.historyTab === 'routes') {
       const current = options.querySelector('[aria-pressed="true"]');
       if (current) {
-        content.append(actionButton(selectedRoute.tripLabel,() => current.focus()));
+        content.append(actionButton(selectedRoute.tripLabel,() => {
+          if (slot.pickPlace) openPanel('route');
+          current.focus();
+        }));
       } else {
         content.textContent = '비교한 경로가 없어요.';
       }
@@ -391,7 +395,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
         const item = document.createElement('li');
         const pick = actionButton(place.name,() => {
           changeHistory(entries => recordRecentSearch(entries,place));
-          pickHistoryPlace(slot,place);
+          pickPlace(place);
         });
         pick.classList.add('route-history-pick');
         const date = document.createElement('time');
@@ -585,11 +589,15 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     clearResults();
   });
 
-  function focusGps() {
+  let afterGps;
+
+  function focusGps(onPosition) {
+    if (onPosition) afterGps = onPosition;
     openPanel('route');
     if (gpsPending) return;
     const start = slots.start;
     const useSearch = message => {
+      afterGps = undefined;
       status.textContent = message;
       start.input.focus();
     };
@@ -607,6 +615,8 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
       return start.version === version;
     };
     navigator.geolocation.getCurrentPosition(({coords}) => {
+      const onPosition = afterGps;
+      afterGps = undefined;
       if (!finish()) return;
       const {latitude:lat,longitude:lng} = coords;
       if (lat<32 || lat>40 || lng<124 || lng>132) {
@@ -614,8 +624,10 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
         return;
       }
       choosePlace(start,{lat,lng,name:'현재 위치',ephemeral:true});
-      slots.end.input.focus();
+      if (onPosition) onPosition();
+      else slots.end.input.focus();
     }, () => {
+      afterGps = undefined;
       if (finish()) useSearch('현재 위치에 접근할 수 없어요. 장소 이름이나 주소로 출발지를 검색해 주세요.');
     }, {timeout:10000,maximumAge:0});
   }
@@ -867,7 +879,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     }
   });
 
-  gpsButton.addEventListener('click',focusGps);
+  gpsButton.addEventListener('click',()=>focusGps());
   drive.addEventListener('click',startDrive);
   summaryDrive.addEventListener('click',startDrive);
   summaryDetails.addEventListener('click',() => {
@@ -911,6 +923,24 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   return {
     focusGps,prepareDeparture,
     savedHome:()=>savedPlaces.home,
+    recordSearch:place=>changeHistory(entries => recordRecentSearch(entries,place)),
+    showHomeHistory(history,onPick) {
+      recentSearches = historyInMemory ? recentSearches : readRecentSearches(storage);
+      renderHistory({history,historyTab:'recent',pickPlace:onPick});
+    },
+    compareToHomePlace(place) {
+      openPanel('route');
+      choosePlace(slots.end,place,false);
+      const endVersion = slots.end.version;
+      const compareWhenReady = () => {
+        if (slots.end.version !== endVersion) return;
+        const missing = tripSlots().find(slot => !slot.place);
+        if (missing) missing.input.focus();
+        else compareTrip();
+      };
+      if (slots.start.place) compareWhenReady();
+      else focusGps(compareWhenReady);
+    },
     chooseMapPlace(slot,place,{fromSearch = false} = {}) {
       if (fromSearch) changeHistory(entries => recordRecentSearch(entries,place));
       openPanel('route');

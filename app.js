@@ -234,6 +234,9 @@ const routing = initRouting({
 const placeSearch = initPlaceSearch({
   map,
   chooseRoutePlace:routing.chooseMapPlace,
+  recordSearch:routing.recordSearch,
+  showHistory:routing.showHomeHistory,
+  compareToPlace:routing.compareToHomePlace,
   onSearch() {if (compact.matches) setPanel(null,false);}
 });
 const loadSignals = initSignals({map,closePanel});
