@@ -21,6 +21,66 @@ const compact = matchMedia('(width < 768px)');
 const scrollPositions = new Map();
 let activePanel = null;
 let microphone = null;
+let navigationOwner = null;
+let explorationPanel, explorationFocus, simulationDrive;
+
+const navigationScreen = document.createElement('section');
+navigationScreen.className = 'navigation-screen';
+navigationScreen.setAttribute('aria-label','주행 모드');
+navigationScreen.hidden = true;
+navigationScreen.innerHTML = `
+  <div class="navigation-cards" data-navigation-cards>
+    <p class="navigation-no-signal">전방 교차로 · 실제 신호 <strong>정보 없음</strong></p>
+  </div>
+  <div class="navigation-controls">
+    <div><span data-navigation-source></span><strong data-navigation-speed>—</strong></div>
+    <button type="button" data-navigation-voice aria-pressed="false">음성 꺼짐</button>
+    <button type="button" data-navigation-exit>주행 종료</button>
+  </div>`;
+workspace.append(navigationScreen);
+const navigationCards = navigationScreen.querySelector('[data-navigation-cards]');
+const navigationSource = navigationScreen.querySelector('[data-navigation-source]');
+const navigationSpeed = navigationScreen.querySelector('[data-navigation-speed]');
+const navigationVoice = navigationScreen.querySelector('[data-navigation-voice]');
+const navigationExit = navigationScreen.querySelector('[data-navigation-exit]');
+const signalCard = el('nextSignal');
+const unavailableSignal = document.createElement('strong');
+unavailableSignal.className = 'navigation-signal-unavailable';
+unavailableSignal.textContent = '정보 없음';
+signalCard.querySelector('ul').after(unavailableSignal);
+
+function showSpeed(speed) {
+  const label = Number.isFinite(speed) && speed >= 0 ? Math.round(speed * 3.6)+' km/h' : '—';
+  if (navigationSpeed.textContent !== label) navigationSpeed.textContent = label;
+  map.setNavigationSpeed(speed);
+}
+
+function setNavigationMode(owner) {
+  if (navigationOwner === owner) return;
+  if (owner) {
+    explorationPanel = activePanel;
+    explorationFocus = document.activeElement;
+    setPanel(null,false);
+  }
+  navigationOwner = owner;
+  navigationScreen.hidden = !owner;
+  workspace.classList.toggle('navigation-mode',Boolean(owner));
+  map.setNavigationMode(owner);
+  showSpeed(null);
+  if (owner) {
+    navigationSource.textContent = owner === 'simulation' ? '모의 주행' : '현재 속도';
+    syncNavigationVoice();
+    navigationExit.focus({preventScroll:true});
+  } else {
+    setPanel(explorationPanel,false);
+    queueMicrotask(()=>{
+      if (navigationOwner) return;
+      if (explorationFocus?.isConnected && explorationFocus.getClientRects().length) {
+        explorationFocus.focus({preventScroll:true});
+      } else (buttons.find(button=>button.dataset.panel === explorationPanel) || buttons[0]).focus();
+    });
+  }
+}
 
 function setPanel(name, focus = true) {
   if (activePanel === name) return;
@@ -39,24 +99,47 @@ function setPanel(name, focus = true) {
   map.redraw();
 }
 function openPanel(name, {playing = false} = {}) {
-  if (playing && name === 'driving') simulation.stop();
-  if (playing && name === 'simulation' && !drivingDock.hidden) driving.stop();
-  if (playing && compact.matches) {
-    setPanel(null,false);
-    el(name === 'driving' ? 'driveStop' : 'playbackToggle').focus({preventScroll:true});
+  if (playing) {
+    if (name === 'driving') simulation.stop();
+    else if (!drivingDock.hidden) driving.stop();
+    setNavigationMode(name === 'driving' ? 'gps' : 'simulation');
     return;
   }
-  setPanel(name);
+  if (!navigationOwner) setPanel(name);
 }
 const closePanel = ()=>setPanel(null);
-const nextSignal = initNextSignal({map,card:el('nextSignal')});
-const navigation = initNavigationGuide({
+const liveSignal = initNextSignal({map,card:signalCard});
+const nextSignal = {
+  ...liveSignal,
+  start(owner,route) {return liveSignal.start(owner,route,navigationCards);}
+};
+const guide = initNavigationGuide({
   card:el('navigationGuide'),speak:text=>el('voiceEnabled').checked && say(text),
   searchParking:destination=>placeSearch.searchParking(destination)
 });
+const navigation = {
+  ...guide,
+  start(owner,route) {
+    if (owner === 'simulation') simulationDrive = route;
+    guide.start(owner,route,navigationCards);
+  },
+  update(owner,progress,options = {}) {
+    if (owner === 'simulation' && navigationOwner === owner && simulationDrive) {
+      const {elapsed, arrived} = options;
+      const waiting = simulationDrive.checkpoints.some(stop=>elapsed >= stop.arrival && elapsed < stop.departure);
+      showSpeed(arrived || waiting ? 0 : simulationDrive.distanceMeters / simulationDrive.movingSeconds);
+    }
+    guide.update(owner,progress,options);
+  },
+  stop(owner) {
+    guide.stop(owner);
+    if (owner === 'simulation') simulationDrive = null;
+    if (navigationOwner === owner) setNavigationMode(null);
+  }
+};
 const simulation = initSimulation({map,openPanel,nextSignal,navigation});
 const driving = initDriving({
-  map,openPanel,nextSignal,navigation,
+  map,openPanel,nextSignal,navigation,onSpeed:showSpeed,
   rerouteFrom:(position,options)=>routing.rerouteFrom(position,options)
 });
 const routing = initRouting({
@@ -73,9 +156,11 @@ const placeSearch = initPlaceSearch({
   onSearch() {if (compact.matches) setPanel(null,false);}
 });
 const loadSignals = initSignals({map,closePanel});
-map.onReady(()=>{
-  simulation.stopOffline();
-});
+el('routeDrive').textContent = el('routeSummaryDrive').textContent = '주행 시작';
+navigationExit.onclick = ()=>{
+  if (navigationOwner === 'simulation') simulation.stop();
+  else if (navigationOwner === 'gps') driving.stop();
+};
 
 for (const button of buttons) {
   button.setAttribute('aria-label',button.title);
@@ -132,6 +217,16 @@ voiceEnabled.onchange = ()=>{
     speech?.cancel();
   }
   el('voiceStatus').textContent = voiceEnabled.checked ? '주행 음성 안내 켜짐' : '주행 음성 안내 꺼짐';
+  syncNavigationVoice();
+};
+function syncNavigationVoice() {
+  navigationVoice.setAttribute('aria-label','주행 음성 안내');
+  navigationVoice.setAttribute('aria-pressed',String(voiceEnabled.checked));
+  navigationVoice.textContent = voiceEnabled.checked ? '음성 켜짐' : '음성 꺼짐';
+}
+navigationVoice.onclick = ()=>{
+  voiceEnabled.checked = !voiceEnabled.checked;
+  voiceEnabled.onchange();
 };
 voiceVolume.oninput = ()=>{el('voiceVolumeValue').value = voiceVolume.value+'%';};
 el('voicePreview').onclick = ()=>say('삼백 미터 앞에서 좌회전하세요.');

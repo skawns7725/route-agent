@@ -67,12 +67,12 @@ function distanceText(meters) {
     : Math.round(meters) + 'm';
 }
 
-export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom}) {
+export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom, onSpeed}) {
   const content = document.getElementById('drivingContent');
   const dock = document.getElementById('drivingDock');
   content.innerHTML = `
     <p id="driveRouteHint" class="status"></p>
-    <button id="driveStart" class="primary" type="button" disabled>GPS 주행 시작</button>
+    <button id="driveStart" class="primary" type="button" disabled>주행 시작</button>
     <p id="drivePanelStatus" class="status" role="status"></p>
   `;
   dock.innerHTML = `
@@ -110,13 +110,13 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
   let legDistance = 0;
   let session = 0;
   let watching = false;
-  let firstFix = true;
 
   function status(text) {
     for (const node of statuses) if (node.textContent !== text) node.textContent = text;
   }
 
   function readings({remaining = null, speed = null, accuracy = null} = {}) {
+    onSpeed(speed);
     el('driveRemaining').textContent = distanceText(remaining);
     el('driveSpeed').textContent = Number.isFinite(speed) && speed >= 0 ? Math.round(speed * 3.6) + 'km/h' : '—';
     el('driveAccuracy').textContent = Number.isFinite(accuracy) && accuracy >= 0 ? '±' + Math.ceil(accuracy) + 'm' : '—';
@@ -214,7 +214,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
   }
 
   function update(position) {
-    const {latitude:lat,longitude:lng,speed,accuracy} = position.coords;
+    const {latitude:lat,longitude:lng,speed,accuracy,heading} = position.coords;
     const age = Date.now() - position.timestamp;
     if (!Number.isFinite(age) || age >= freshnessMs || age < -5000 || !Number.isFinite(lat) || !Number.isFinite(lng) ||
         Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
@@ -236,8 +236,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
       reliablePoint = accuracy <= 40 ? current : null;
       rerouteButton.disabled = !reliablePoint || Boolean(rerouteRequest);
       recenter.disabled = false;
-      map.setLivePosition(point,{follow:firstFix});
-      firstFix = false;
+      map.setLivePosition(point,{heading,accuracy});
       if (result.state === 'on-route') {
         offRouteFixes = 0;
         const progress = result.metersAlong / geometry.length;
@@ -272,7 +271,6 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
     startedAt = performance.now();
     lastRerouteAt = -Infinity;
     passedWaypoints = completedDistance = legDistance = 0;
-    firstFix = true;
     button.disabled = true;
     dock.hidden = false;
     stopButton.textContent = '주행 종료';
