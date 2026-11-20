@@ -179,7 +179,7 @@ function offlineMap(canvas, preview) {
   };
 }
 
-export function createMap(preview) {
+export function createMap(preview,{mapType = 'road',traffic = false,onTrafficChange} = {}) {
   const canvas = document.getElementById('exampleMap');
   const live = document.getElementById('atlasMap');
   const credit = document.getElementById('mapCredit');
@@ -197,7 +197,7 @@ export function createMap(preview) {
   let routeLine, routeMarkers = [], observedMarker, gpsMarker, simulatedMarker, nextSignalMarker;
   let placeMarkers = [];
   let followingGps = false;
-  let trafficEnabled = false;
+  let trafficEnabled = traffic;
   let navigationOwner = null, navigationPoint, bearingPoint, heading, exploreCamera;
   let navigationSpeed = null, navigationLevel = 3;
   let vehicle, sdkCredit, sdkCreditAnchor;
@@ -329,17 +329,26 @@ export function createMap(preview) {
     if (liveMode) instance.setLevel(Math.max(1,Math.min(14,instance.getLevel()-delta)));
     else offline.zoom(delta);
   }
+  function setMapType(type) {
+    mapType = type;
+    const id = sdk?.MapTypeId?.[type === 'hybrid' ? 'HYBRID' : 'ROADMAP'];
+    if (id != null) instance.setMapTypeId(id);
+  }
   document.getElementById('zoomIn').onclick = ()=>zoom(1);
   document.getElementById('zoomOut').onclick = ()=>zoom(-1);
   switchButton.onclick = ()=>chooseMode('live');
-  if (trafficButton) trafficButton.onclick = ()=>{
-    if (trafficButton.disabled) return;
-    const traffic = sdk.MapTypeId.TRAFFIC;
-    if (trafficEnabled) instance.removeOverlayMapTypeId(traffic);
-    else instance.addOverlayMapTypeId(traffic);
-    trafficEnabled = !trafficEnabled;
+  if (trafficButton) {
     trafficButton.setAttribute('aria-pressed',String(trafficEnabled));
-  };
+    trafficButton.onclick = ()=>{
+      if (trafficButton.disabled) return;
+      const id = sdk.MapTypeId.TRAFFIC;
+      trafficEnabled = !trafficEnabled;
+      if (trafficEnabled) instance.addOverlayMapTypeId(id);
+      else instance.removeOverlayMapTypeId(id);
+      trafficButton.setAttribute('aria-pressed',String(trafficEnabled));
+      onTrafficChange?.(trafficEnabled);
+    };
+  }
   chooseMode('pending');
 
   function setConnectionStatus(message, retryable = false) {
@@ -375,6 +384,8 @@ export function createMap(preview) {
       });
       sdk = window.kakao.maps;
       instance = new sdk.Map(live,{center:new sdk.LatLng(37.564,126.978),level:8});
+      setMapType(mapType);
+      if (trafficEnabled && sdk.MapTypeId?.TRAFFIC != null) instance.addOverlayMapTypeId(sdk.MapTypeId.TRAFFIC);
       // Keep the SDK's real attribution upright outside the transformed map.
       const logo = live.querySelector?.('img[alt^="Kakao"][src*="/mapjsapi/images/"]');
       sdkCredit = logo?.closest('a')?.parentElement?.parentElement;
@@ -400,6 +411,7 @@ export function createMap(preview) {
     onReady(listener){if (instance) listener({sdk,instance}); else listeners.push(listener);},
     redraw:offline.redraw,
     setNavigationMode,
+    setMapType,
     setNavigationSpeed(speed){navigationSpeed=speed;},
     setRoute(value){route=value;redrawRoute();},
     setObservedPoint(value){observation=value;redrawObservation();},
