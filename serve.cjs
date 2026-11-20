@@ -37,6 +37,26 @@ function normalizePlace(item) {
   return {name,address,lat,lng,category:cleanText(item.category_name).split('>').at(-1).trim(),phone:cleanText(item.phone)};
 }
 
+function uniqueParking(places) {
+  const samePlace = (a,b)=>(a.lat === b.lat && a.lng === b.lng) ||
+    (a.address && a.address === b.address && a.name === b.name);
+  const groups = [];
+  for (const place of places) {
+    const matches = groups.filter(group=>group.some(record=>samePlace(record,place)));
+    const [first,...duplicates] = matches;
+    if (!first) {
+      groups.push([place]);
+      continue;
+    }
+    first.push(place);
+    for (const group of duplicates) {
+      first.push(...group);
+      groups.splice(groups.indexOf(group),1);
+    }
+  }
+  return groups.map(([first])=>first);
+}
+
 async function localDocuments(search, params, key, signal) {
   const url = new URL('https://dapi.kakao.com/v2/local/search/'+search+'.json');
   url.search = new URLSearchParams(params);
@@ -77,7 +97,7 @@ async function handlePlaceSearch(url, send) {
       }
       places.push(place);
     }
-    return send(200,{places});
+    return send(200,{places:parking ? uniqueParking(places) : places});
   } catch {
     return send(502,{error:parking ? '주차장을 가져오지 못했어요.' : '장소를 가져오지 못했어요.'});
   }

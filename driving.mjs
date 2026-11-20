@@ -241,7 +241,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
         offRouteFixes = 0;
         const progress = result.metersAlong / geometry.length;
         legDistance = Math.max(legDistance,progress * (route.distanceMeters ?? geometry.length));
-        navigation.update('gps', result.signalPositionReliable ? progress : null,{announce:true});
+        navigation.update('gps', result.signalPositionReliable ? progress : null,{announce:true,estimatedAt:position.timestamp});
         passedWaypoints = Math.max(passedWaypoints,
           (originalRoute.waypoints?.length ?? 0) - (route.waypoints?.length ?? 0) + navigation.passedWaypoints('gps'));
       } else {

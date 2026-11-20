@@ -90,6 +90,27 @@ test('looks up up to ten parking results within 1 km and preserves a distance of
   assert.deepEqual(places.map(({name,distance})=>[name,distance]),[['공영주차장',0],['거리 미제공',null]]);
 });
 
+test('collapses parking records by name and address or exact coordinates',async t=>{
+  const address = '서울 중구 한강대로 405';
+  const original = {place_name:'커넥트플레이스 마켓존 주차장',road_address_name:address,x:'126.97',y:'37.55',distance:'75'};
+  mockLocal(t,()=>[
+    original,
+    {...original,x:'126.9701'},
+    {...original,x:'126.9702'},
+    {...original,place_name:'별칭 주차장',x:'126.97020',road_address_name:'서울 중구 다른 주소'},
+    {...original,place_name:'별도 주차장',x:'126.971',distance:'90'},
+    {...original,road_address_name:'서울 중구 별도 주소',x:'126.972',distance:'155'}
+  ]);
+  const response = await request(baseUrl+'/api/parking?lat=37.55&lng=126.97');
+  assert.equal(response.status,200);
+  const {places} = await response.json();
+  assert.deepEqual(places.map(({name,address,distance})=>[name,address,distance]),[
+    [original.place_name,address,75],
+    ['별도 주차장',address,90],
+    [original.place_name,'서울 중구 별도 주소',155]
+  ]);
+});
+
 test('rejects foreign origins and invalid input before attempting Kakao requests',async t=>{
   const upstream = t.mock.method(globalThis,'fetch',async()=>{throw new Error('unexpected upstream call');});
   const search = '/api/places?keyword=test';

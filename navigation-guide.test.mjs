@@ -29,6 +29,15 @@ test('keeps branch guidance and explicitly represents missing direction metadata
   assert.equal(readNavigation(plan,.5).seconds,60);
 });
 
+test('recalculates the arrival timestamp from each observation and remaining estimate',()=>{
+  const plan = buildNavigationPlan(route);
+  const first = Date.parse('2026-11-20T19:08:00+09:00');
+  const second = first + 30_000;
+  assert.equal(readNavigation(plan,.2,900,first).arrivalAt,first+900_000);
+  assert.equal(readNavigation(plan,.3,780,second).arrivalAt,second+780_000);
+  assert.equal(readNavigation(plan,.3,780,first+120_000).arrivalAt,first+900_000);
+});
+
 test('counts a waypoint once when Kakao repeats it at a section boundary',()=>{
   const stop = {x:127,y:37.002,type:1000,guidance:'경유지',road_index:-1};
   const plan = buildNavigationPlan({points,sections:[{guides:[stop]},{guides:[

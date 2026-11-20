@@ -4,7 +4,7 @@ import {initSignals} from './signals.js';
 import {exampleRoute, initSimulation} from './simulation.js';
 import {initDriving} from './driving.mjs';
 import {initNextSignal} from './next-signal.mjs';
-import {initPlaceSearch} from './place-search.mjs';
+import {initNavigationParking, initPlaceSearch} from './place-search.mjs';
 import {initNavigationGuide} from './navigation-guide.mjs';
 
 const el = id=>document.getElementById(id);
@@ -32,6 +32,14 @@ navigationScreen.innerHTML = `
   <div class="navigation-cards" data-navigation-cards>
     <p class="navigation-no-signal">전방 교차로 · 실제 신호 <strong>정보 없음</strong></p>
   </div>
+  <section class="navigation-parking" aria-labelledby="navigationParkingTitle" hidden>
+    <div class="navigation-parking-heading">
+      <h2 id="navigationParkingTitle">도착지 주변 주차장</h2>
+      <button type="button" aria-label="주차장 목록 닫기">닫기</button>
+    </div>
+    <p role="status"></p>
+    <ul></ul>
+  </section>
   <div class="navigation-controls">
     <div><span data-navigation-source></span><strong data-navigation-speed>—</strong></div>
     <button type="button" data-navigation-voice aria-pressed="false">음성 꺼짐</button>
@@ -43,6 +51,7 @@ const navigationSource = navigationScreen.querySelector('[data-navigation-source
 const navigationSpeed = navigationScreen.querySelector('[data-navigation-speed]');
 const navigationVoice = navigationScreen.querySelector('[data-navigation-voice]');
 const navigationExit = navigationScreen.querySelector('[data-navigation-exit]');
+const navigationParking = initNavigationParking({sheet:navigationScreen.querySelector('.navigation-parking')});
 const signalCard = el('nextSignal');
 const unavailableSignal = document.createElement('strong');
 unavailableSignal.className = 'navigation-signal-unavailable';
@@ -72,6 +81,7 @@ function setNavigationMode(owner) {
     syncNavigationVoice();
     navigationExit.focus({preventScroll:true});
   } else {
+    navigationParking.close(false);
     setPanel(explorationPanel,false);
     queueMicrotask(()=>{
       if (navigationOwner) return;
@@ -115,7 +125,7 @@ const nextSignal = {
 };
 const guide = initNavigationGuide({
   card:el('navigationGuide'),speak:text=>el('voiceEnabled').checked && say(text),
-  searchParking:destination=>placeSearch.searchParking(destination)
+  searchParking:(destination,button)=>navigationParking.open(destination,button)
 });
 const navigation = {
   ...guide,
@@ -175,7 +185,9 @@ railToggle.onclick = ()=>{
 };
 el('closePanel').onclick = closePanel;
 document.addEventListener('keydown',event=>{
-  if (event.key === 'Escape' && activePanel) closePanel();
+  if (event.key !== 'Escape' || event.defaultPrevented) return;
+  if (navigationParking.close()) event.preventDefault();
+  else if (activePanel) closePanel();
 });
 el('gpsButton').onclick = ()=>routing.focusGps();
 sampleShortcut.onclick = ()=>simulation.playExample();
