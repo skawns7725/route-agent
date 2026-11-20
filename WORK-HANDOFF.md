@@ -1,5 +1,11 @@
 Last-Author: Codex
 
+## 2026-11-20 주행 지도 원근과 라벨 회전
+
+- `codex/place-search-proxy`의 `1164014`에서 `codex/navigation-perspective`를 분기했다. 카카오 공식 웹 문서와 공개 SDK를 Node DOM에서 확인했다. 지도 객체에 공식 heading·rotation·tilt 메서드가 없고, 지도 타일과 로고·저작권 그룹은 서로 다른 요소에 있었다.
+- `map-view.js`, `map.css`에서 카카오 지도와 오프라인 캔버스 전체에 heading 회전과 38도 원근 기울기를 적용했다. 오프라인 글자도 도로와 함께 회전한다. 차량과 안내 UI는 지도 바깥에 두고, 카카오의 원본 로고·저작권은 주행 중 별도로 배치한 뒤 탐색 복귀 시 SDK 위치에 돌려놓는다.
+- `node --test` 34개 통과. Node DOM에서 GPS 주행, GPS 없는 실경로 재생, 지도 미연결 오프라인 예시의 진입·종료와 로고·저작권 위치 복원을 확인했다. 브라우저 렌더링과 실제 화면의 글자 가독성은 미검증이다.
+
 ## 2026-11-20 카카오 장소·주차장 검색 프록시
 
 - `codex/navigation-mode`의 `3599d06`에서 `codex/place-search-proxy`를 분기했다. verbose-bassoon 미리보기에서 지도는 표시되지만 SDK 장소 요청은 401이라는 보고에 따라 `place-search.mjs`의 장소·주차장 조회를 same-origin 서버 요청으로 바꿨다. 경로 패널과 지도 검색이 같은 장소 조회 함수를 사용한다.

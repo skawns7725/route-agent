@@ -1,6 +1,5 @@
 const center = {lat:36.348,lng:127.397};
 const routeColor = '#2563eb';
-const vehicleAnchor = 2 / 3;
 const zoomSpeeds = [30, 60, 90];
 
 function courseBetween(from, to, minimumMeters) {
@@ -37,13 +36,14 @@ const labels = [
 function offlineMap(canvas, preview) {
   const ctx = canvas.getContext('2d');
   let width = 0, height = 0, zoom = 1, panX = 0, panY = 0, frame = 0, snapshot = null, drag, camera;
+  let cameraScale;
   const workspace = document.getElementById('workspace');
   function point(lng, lat) {
     if (camera) {
-      const scale = Math.min(width/.137,height/.113) * 2 ** (5-camera.level);
-      const x = (lng-camera.point.lng)*scale*.82;
-      const y = (camera.point.lat-lat)*scale;
-      return [width/2+x*camera.cos-y*camera.sin,height*vehicleAnchor+x*camera.sin+y*camera.cos];
+      return [
+        width/2 + (lng-camera.point.lng)*cameraScale*.82,
+        height/2 + (camera.point.lat-lat)*cameraScale
+      ];
     }
     const compact = matchMedia('(width < 768px)').matches;
     const tablet = matchMedia('(768px <= width < 1024px)').matches;
@@ -96,7 +96,9 @@ function offlineMap(canvas, preview) {
     width = canvas.clientWidth;
     height = canvas.clientHeight;
     if (!width || !height) return;
-    const dpr = Math.min(window.devicePixelRatio || 1,2);
+    // Base zoom on the viewport rather than the oversized perspective surface.
+    if (camera) cameraScale = Math.min(workspace.clientWidth/.137,workspace.clientHeight/.113) * 2 ** (5-camera.level);
+    const dpr = Math.min(window.devicePixelRatio || 1,2,camera ? 4096/Math.max(width,height) : Infinity);
     if (canvas.width !== Math.round(width*dpr) || canvas.height !== Math.round(height*dpr)) {
       canvas.width = Math.round(width*dpr);
       canvas.height = Math.round(height*dpr);
@@ -198,7 +200,7 @@ export function createMap(preview) {
   let trafficEnabled = false;
   let navigationOwner = null, navigationPoint, bearingPoint, heading, exploreCamera;
   let navigationSpeed = null, navigationLevel = 3;
-  let vehicle;
+  let vehicle, sdkCredit, sdkCreditAnchor;
 
   new ResizeObserver(() => {
     if (liveMode) {
@@ -206,6 +208,19 @@ export function createMap(preview) {
       if (navigationPoint) instance.setCenter(latLng(navigationPoint));
     }
   }).observe(live);
+
+  function updateSdkCredit() {
+    if (!sdkCredit) return;
+    if (liveMode && navigationOwner) {
+      if (sdkCredit.parentElement === workspace) return;
+      sdkCredit.replaceWith(sdkCreditAnchor);
+      sdkCredit.classList.add('map-sdk-credit');
+      workspace.append(sdkCredit);
+    } else if (sdkCreditAnchor.parentNode) {
+      sdkCreditAnchor.replaceWith(sdkCredit);
+      sdkCredit.classList.remove('map-sdk-credit');
+    }
+  }
 
   function chooseMode(mode) {
     liveMode = mode === 'live' && Boolean(instance);
@@ -220,6 +235,7 @@ export function createMap(preview) {
     switchButton.hidden = !exampleMode || !instance;
     workspace.classList.toggle('map-live',liveMode);
     workspace.classList.toggle('map-ready',Boolean(instance));
+    updateSdkCredit();
     if (liveMode) instance.relayout();
     if (exampleMode) offline.redraw();
   }
@@ -267,8 +283,7 @@ export function createMap(preview) {
     const angle = heading ?? 0;
     workspace.style.setProperty('--navigation-heading',angle+'deg');
     if (exampleMode) {
-      const radians = -angle * Math.PI/180;
-      offline.setCamera({point,level:navigationLevel,cos:Math.cos(radians),sin:Math.sin(radians)});
+      offline.setCamera({point,level:navigationLevel});
     } else if (liveMode) {
       if (instance.getLevel() !== navigationLevel) instance.setLevel(navigationLevel);
       instance.setCenter(latLng(point));
@@ -293,6 +308,7 @@ export function createMap(preview) {
     workspace.classList.toggle('navigation-map',Boolean(owner));
     workspace.style.removeProperty('--navigation-heading');
     offline.setCamera(null);
+    updateSdkCredit();
     if (!instance) return;
     instance.relayout();
     instance.setDraggable(!owner);
@@ -359,9 +375,10 @@ export function createMap(preview) {
       });
       sdk = window.kakao.maps;
       instance = new sdk.Map(live,{center:new sdk.LatLng(37.564,126.978),level:8});
-      // Anchor the SDK's own logo and copyright together inside the rotated viewport.
+      // Keep the SDK's real attribution upright outside the transformed map.
       const logo = live.querySelector?.('img[alt^="Kakao"][src*="/mapjsapi/images/"]');
-      logo?.closest('a')?.parentElement?.parentElement?.classList.add('map-sdk-credit');
+      sdkCredit = logo?.closest('a')?.parentElement?.parentElement;
+      if (sdkCredit) sdkCreditAnchor = document.createComment('Kakao map attribution');
       sdk.event.addListener(instance,'dragstart',()=>{followingGps=false;});
       chooseMode(exampleMode ? 'example' : 'live');
       workspace.classList.remove('map-unavailable');
