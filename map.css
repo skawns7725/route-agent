@@ -664,7 +664,11 @@ button { text-align: center; }
   font-weight: 700;
 }
 .navigation-direction [data-guide-arrow] { font-size: 34px; line-height: 1; }
-.navigation-cards [data-guide-branches] { display: none; }
+.navigation-cards [data-guide-branches] {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.navigation-cards [data-guide-branches]:empty { display: none; }
 .navigation-speedometer {
   display: flex;
   align-items: center;

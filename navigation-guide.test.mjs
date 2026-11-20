@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {buildNavigationPlan, directionArrow, readNavigation} from './navigation-guide.mjs';
+import {buildNavigationPlan, directionArrow, readNavigation, sequentialJunctions} from './navigation-guide.mjs';
 
 const points = [{lat:37,lng:127},{lat:37.002,lng:127},{lat:37.004,lng:127}];
 const route = {points,distanceMeters:440,durationSeconds:120,sections:[{
@@ -56,4 +56,27 @@ test('uses the next instruction for the direction arrow and omits unknown direct
   assert.equal(directionArrow('직진'),'↑');
   assert.equal(directionArrow('목적지 도착'),'');
   assert.equal(directionArrow(''),'');
+});
+
+test('shows sequential junctions in route order with distances from the current position',()=>{
+  const plan = buildNavigationPlan(route);
+  const offset = plan.steps[0].meters - 100;
+  const {sequence} = readNavigation(plan,offset/plan.length);
+  assert.deepEqual(sequence.map(({step,distance,order,total})=>[step.text,step.road,Math.round(distance),order,total]),[
+    ['좌회전','진입로',100,1,2],
+    ['오른쪽 방향','큰길',211,2,2]
+  ]);
+  const steps = [{...plan.steps[0],meters:220},{...plan.steps[1],meters:720}];
+  assert.deepEqual(sequentialJunctions(steps,100).map(item=>item.distance),[120,620]);
+  assert.deepEqual(readNavigation(plan,.35).sequence,[]);
+});
+
+test('does not group junctions more than 500 meters apart',()=>{
+  const [first,second] = buildNavigationPlan(route).steps;
+  assert.deepEqual(sequentialJunctions([{...first,meters:120},{...second,meters:621}],0),[]);
+});
+
+test('does not synthesize junctions when the route has no guides',()=>{
+  const plan = buildNavigationPlan({points});
+  assert.deepEqual(readNavigation(plan,.2).sequence,[]);
 });
