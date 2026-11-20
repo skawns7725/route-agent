@@ -1,6 +1,7 @@
 import {prepareRouteGeometry, projectOnSegment} from './driving.mjs';
 
 const junctionTypes = new Set([5,6,7,8,9,10,11,12,14,15,16,17,42,43,44,45,46,47,48,49,82,83,86]);
+const junctionLookahead = 2000;
 const arrival = 101;
 const waypoint = 1000;
 
@@ -37,6 +38,13 @@ export function buildNavigationPlan(route) {
   };
 }
 
+export function sequentialJunctions(steps,offset) {
+  const [first,second] = steps.filter(step=>step.meters >= offset &&
+    (step.junction || step.type === 1 || step.type === 2));
+  if (!second || first.meters - offset > junctionLookahead || second.meters - first.meters > 500) return [];
+  return [first,second].map((step,index)=>({step,distance:step.meters - offset,order:index + 1,total:2}));
+}
+
 export function readNavigation(plan,progress,secondsRemaining,estimatedAt) {
   const fraction = Math.min(1,Math.max(0,progress));
   const offset = fraction * plan.length;
@@ -47,7 +55,8 @@ export function readNavigation(plan,progress,secondsRemaining,estimatedAt) {
   return {
     step,index,
     junctions:plan.steps.slice(Math.max(0,index)).filter(item=>item.junction && item.meters >= offset &&
-      item.meters - offset <= 2000).slice(0,3),
+      item.meters - offset <= junctionLookahead).slice(0,3),
+    sequence:fraction === 1 ? [] : sequentialJunctions(plan.steps,offset),
     stepDistance:step ? Math.max(0,step.meters - offset) : null,
     passedWaypoints:plan.steps.filter(item=>item.type === waypoint && item.meters < offset).length,
     remaining:(1-fraction)*plan.distance,
@@ -58,6 +67,7 @@ export function readNavigation(plan,progress,secondsRemaining,estimatedAt) {
 
 const metersText = meters=>meters >= 1000 ? (meters/1000).toFixed(1)+' km' : Math.round(meters)+' m';
 const tripDistance = meters=>metersText(meters).replace(' ','');
+const spokenManeuver = (step,distance)=>metersText(distance)+' 앞 '+step.text+(step.road ? ', '+step.road : '');
 const minutesText = seconds=>seconds > 0 && seconds < 60 ? '1분 미만' : Math.ceil(seconds/60)+'분';
 
 export function directionArrow(instruction) {
@@ -151,7 +161,7 @@ export function initNavigationGuide({card,trip,speak,searchParking}) {
       session.progress = Math.max(session.progress,progress);
       const state = readNavigation(session.plan,session.progress,seconds,estimatedAt);
       session.passedWaypoints = state.passedWaypoints;
-      const {step,stepDistance} = state;
+      const {step,stepDistance,sequence} = state;
       const index = step && !arrived ? state.index : -1;
       if (index !== session.highlight) {
         steps.children[session.highlight]?.removeAttribute('aria-current');
@@ -164,8 +174,19 @@ export function initNavigationGuide({card,trip,speak,searchParking}) {
       showDirection(arrived ? '' : step?.text || '');
       trip.hidden = false;
       const upcoming = state.junctions.filter(item=>item !== step);
-      text(branches,arrived || !upcoming.length ? '' : '이어지는 분기 · '+upcoming
-        .map(item=>[item.text,item.road].filter(Boolean).join(' ')).join(' → '));
+      let branchText = '';
+      if (!arrived && sequence.length) {
+        branchText = '다음 진입점 이어서 안내 '+sequence.map(item=>{
+          const symbol = directionArrow(item.step.text);
+          const instruction = [symbol,item.step.text].filter(Boolean).join(' ');
+          return ['('+item.order+'/'+item.total+')',tripDistance(item.distance)+' 앞 '+instruction,item.step.road]
+            .filter(Boolean).join(' · ');
+        }).join(' / ');
+      } else if (!arrived && upcoming.length) {
+        branchText = '이어지는 분기 · '+upcoming
+          .map(item=>[item.text,item.road].filter(Boolean).join(' ')).join(' → ');
+      }
+      text(branches,branchText);
       if (arrived) {
         showArrivalTime(null);
         text(stats,[tripDistance(distanceTraveled ?? session.plan.distance),Number.isFinite(elapsed) ? minutesText(elapsed) : '']
@@ -176,9 +197,11 @@ export function initNavigationGuide({card,trip,speak,searchParking}) {
       text(stats,[state.seconds === null ? '' : minutesText(state.seconds),tripDistance(state.remaining)]
         .filter(Boolean).join(', '));
       showArrivalTime(state.arrivalAt);
+      const followUp = sequence[0]?.step === step ? sequence[1] : null;
       if (announce && step && stepDistance <= (step.type === arrival ? 500 : 300) &&
           session.lastAnnouncement !== state.index &&
-          speak(metersText(stepDistance)+' 앞 '+step.text+(step.road ? ', '+step.road : ''))) {
+          speak(spokenManeuver(step,stepDistance)+(followUp ?
+            '. 이어서 '+spokenManeuver(followUp.step,followUp.distance)+'.' : ''))) {
         session.lastAnnouncement = state.index;
         if (step.type === arrival) session.nearAnnounced = true;
       } else if (announce && (!step || stepDistance > 300) && session.destination && state.remaining <= 500 && !session.nearAnnounced &&
