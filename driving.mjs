@@ -2,7 +2,14 @@ const metersPerDegree = 111195;
 const maximumAccuracy = 100;
 const freshnessMs = 20000;
 const arrivalRadius = 40;
-const rerouteInterval = 30000;
+const autoRerouteAccuracy = 75;
+const rerouteInterval = 10000;
+
+export function readAutoReroute({state, accuracy, previousFixes, elapsed, pending}) {
+  const fixes = state === 'off-route' && Number.isFinite(accuracy) &&
+    accuracy >= 0 && accuracy <= autoRerouteAccuracy ? previousFixes + 1 : 0;
+  return {fixes, retry:fixes >= 2 && elapsed >= rerouteInterval && !pending};
+}
 
 function localMeters(point, origin) {
   const longitudeScale = Math.cos(origin.lat * Math.PI / 180);
@@ -105,6 +112,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
   let startedAt = 0;
   let lastRerouteAt = -Infinity;
   let offRouteFixes = 0;
+  let rerouteFailure = '';
   let passedWaypoints = 0;
   let completedDistance = 0;
   let legDistance = 0;
@@ -183,15 +191,18 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
     map.setRoute({points:value.points,markers});
   }
 
-  async function findUpdatedRoute() {
-    if (!watching || !reliablePoint || rerouteRequest) return;
+  async function findUpdatedRoute(position, automatic = false) {
+    if (!watching || !position || rerouteRequest) return;
     const request = new AbortController();
     rerouteRequest = request;
     rerouteButton.disabled = true;
     lastRerouteAt = performance.now();
-    status('현재 위치에서 교통을 반영해 경로를 찾고 있어요.');
+    offRouteFixes = 0;
+    rerouteFailure = '';
+    status(automatic ? '경로에서 벗어났어요. 현재 위치에서 새 경로를 찾고 있어요.'
+      : '현재 위치에서 교통을 반영해 경로를 찾고 있어요.');
     try {
-      const next = await rerouteFrom(reliablePoint,{passedWaypoints,signal:request.signal});
+      const next = await rerouteFrom(position,{passedWaypoints,signal:request.signal});
       if (rerouteRequest !== request || !watching) return;
       const shape = prepareRouteGeometry(next.points);
       if (!shape.length) throw new Error('경로 좌표가 없어요.');
@@ -203,10 +214,13 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
       showMapRoute(route);
       nextSignal.start('gps',geometry,dock);
       navigation.start('gps',route,dock);
-    onDepartureNotice(departure.notice || '');
+      el('driveRouteName').textContent = route.name;
       status('교통을 반영한 경로로 안내하고 있어요.');
-    } catch (error) {
-      if (rerouteRequest === request) status(error.message || '새 경로를 찾지 못했어요.');
+    } catch {
+      if (rerouteRequest === request) {
+        rerouteFailure = '새 경로를 찾지 못했어요. 기존 경로를 유지해요.';
+        status(rerouteFailure);
+      }
     } finally {
       if (rerouteRequest === request) {
         rerouteRequest = null;
@@ -232,7 +246,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
     clearTimeout(expiry);
     if (result.state === 'inaccurate') {
       discardPosition();
-      status('GPS 정확도가 낮아 현재 위치와 남은 경로를 확인할 수 없어요.');
+      if (!rerouteRequest) status('GPS 정확도가 낮아 현재 위치와 남은 경로를 확인할 수 없어요.');
     } else {
       point = current;
       reliablePoint = accuracy <= 40 ? current : null;
@@ -241,6 +255,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
       map.setLivePosition(point,{heading,accuracy});
       if (result.state === 'on-route') {
         offRouteFixes = 0;
+        rerouteFailure = '';
         const progress = result.metersAlong / geometry.length;
         legDistance = Math.max(legDistance,progress * (route.distanceMeters ?? geometry.length));
         navigation.update('gps', result.signalPositionReliable ? progress : null,{announce:true,estimatedAt:position.timestamp});
@@ -248,17 +263,19 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
           (originalRoute.waypoints?.length ?? 0) - (route.waypoints?.length ?? 0) + navigation.passedWaypoints('gps'));
       } else {
         navigation.update('gps',null);
-        offRouteFixes = reliablePoint ? offRouteFixes+1 : 0;
-        if (offRouteFixes >= 2 && performance.now()-lastRerouteAt >= rerouteInterval) void findUpdatedRoute();
+        const decision = readAutoReroute({state:result.state,accuracy,previousFixes:offRouteFixes,
+          elapsed:performance.now()-lastRerouteAt,pending:Boolean(rerouteRequest)});
+        offRouteFixes = decision.fixes;
+        if (decision.retry) void findUpdatedRoute(current,true);
       }
       if (!rerouteRequest) status(result.state === 'off-route'
-        ? '선택한 경로에서 벗어났어요. 새 경로를 조회할 수 있어요.'
+        ? rerouteFailure || '선택한 경로에서 벗어났어요. GPS 위치를 확인하고 있어요.'
         : '실제 GPS 위치를 표시하고 있어요.');
     }
     expiry = setTimeout(()=>{
       discardPosition();
       readings();
-      status('최근 GPS 위치를 받지 못했어요.');
+      if (!rerouteRequest) status('최근 GPS 위치를 받지 못했어요.');
     },freshnessMs - Math.max(age,0));
   }
 
@@ -286,6 +303,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
     watching = true;
     startedAt = performance.now();
     lastRerouteAt = -Infinity;
+    rerouteFailure = '';
     passedWaypoints = completedDistance = legDistance = 0;
     button.disabled = true;
     dock.hidden = false;
@@ -304,13 +322,16 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
       },error=>{
         if (token !== session) return;
         if (error.code === 1) {
-          if (departure.allowWithoutGps) status('위치 권한이 없어 GPS 위치를 표시할 수 없어요.');
-          else finish('위치 권한을 허용한 뒤 GPS 주행을 다시 시작해 주세요.');
+          if (departure.allowWithoutGps) {
+            if (!rerouteRequest) status('위치 권한이 없어 GPS 위치를 표시할 수 없어요.');
+          } else {
+            finish('위치 권한을 허용한 뒤 GPS 주행을 다시 시작해 주세요.');
+          }
           return;
         }
         discardPosition();
         readings();
-        status('GPS 위치를 확인할 수 없어요. 위치 수신을 다시 기다리고 있어요.');
+        if (!rerouteRequest) status('GPS 위치를 확인할 수 없어요. 위치 수신을 다시 기다리고 있어요.');
       },{enableHighAccuracy:true,maximumAge:0,timeout:12000});
       if (token === session) watchId = id;
       else navigator.geolocation.clearWatch(id);
@@ -328,7 +349,7 @@ export function initDriving({map, openPanel, nextSignal, navigation, rerouteFrom
   button.onclick = start;
   stopButton.onclick = stop;
   recenter.onclick = ()=>{if (point) map.setLivePosition(point,{follow:true});};
-  rerouteButton.onclick = findUpdatedRoute;
+  rerouteButton.onclick = ()=>findUpdatedRoute(reliablePoint);
   window.addEventListener('pagehide',stop);
   setRoute(null);
   return {setRoute,start,stop,isActive:()=>watching};

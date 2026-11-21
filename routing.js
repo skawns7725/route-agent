@@ -623,7 +623,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   async function prepareDeparture() {
     const original = selectedRoute;
     const origin = original?.origin;
-    if (origin?.ephemeral !== true || origin.name !== '현재 위치') return {};
+    if (!origin) return null;
     status.textContent = '출발지의 현재 위치를 확인하고 있어요…';
     const fix = await new Promise(resolve=>{
       if (!navigator.geolocation) return resolve(null);
@@ -656,16 +656,15 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
 
     status.textContent = '현재 위치에서 새 경로를 찾고 있어요…';
     const request = departureRequest = new AbortController();
-    const updated = {...origin,lat:fix.lat,lng:fix.lng};
+    const updated = {lat:fix.lat,lng:fix.lng,name:'현재 위치',ephemeral:true};
     const {destination,waypoints:stops,kind} = original;
     try {
       const data = await requestRoute('/api/route-comparison',tripParams(updated,destination,stops),request.signal);
       if (selectedRoute !== original) return null;
       const choice = data.options.find(option=>option.kind === kind);
       if (!choice?.route || routePoints(choice.route).length < 2) throw Error();
-      slots.start.place = updated;
       departureRequest = null;
-      clearResults();
+      choosePlace(slots.start,updated,false);
       showOptions(data,kind);
       const notice = '출발지를 현재 위치로 수정했어요. 경로를 다시 찾았어요.';
       status.textContent = notice;

@@ -6,7 +6,6 @@ export function metersBetween(a, b) {
 }
 
 export function departureCorrection(origin, fix) {
-  if (origin?.ephemeral !== true || origin.name !== '현재 위치') return 'keep';
   if (!fix || !Number.isFinite(fix.accuracy) || fix.accuracy < 0 || fix.accuracy > 100 ||
       !Number.isFinite(fix.lat) || Math.abs(fix.lat) > 90 ||
       !Number.isFinite(fix.lng) || Math.abs(fix.lng) > 180) return 'unavailable';
