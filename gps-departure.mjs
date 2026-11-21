@@ -12,3 +12,11 @@ export function departureCorrection(origin, fix) {
       !Number.isFinite(fix.lng) || Math.abs(fix.lng) > 180) return 'unavailable';
   return metersBetween(origin,fix) > 100 ? 'correct' : 'keep';
 }
+
+export function gpsOriginDecision(coords,requestVersion,currentVersion) {
+  if (requestVersion !== currentVersion) return {kind:'ignore'};
+  const {latitude:lat,longitude:lng} = coords ?? {};
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return {kind:'unavailable'};
+  if (lat < 32 || lat > 40 || lng < 124 || lng > 132) return {kind:'outside-region'};
+  return {kind:'use',place:{lat,lng,name:'현재 위치',ephemeral:true}};
+}

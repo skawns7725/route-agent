@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {metersBetween,departureCorrection} from './gps-departure.mjs';
+import {metersBetween,departureCorrection,gpsOriginDecision} from './gps-departure.mjs';
 
 const origin = {lat:0,lng:0,name:'현재 위치',ephemeral:true};
 const fixAt = (meters,accuracy = 100)=>({
@@ -31,4 +31,22 @@ test('GPS accuracy must be 100 m or better',()=>{
 test('manual departures stay fixed even with the current-location label',()=>{
   assert.equal(departureCorrection({...origin,ephemeral:false},fixAt(150)),'keep');
   assert.equal(departureCorrection({...origin,name:'서울시청'},fixAt(150)),'keep');
+});
+
+test('accepts a usable GPS origin as temporary current location',()=>{
+  assert.deepEqual(gpsOriginDecision({latitude:36.35,longitude:127.38},0,0),{
+    kind:'use',place:{lat:36.35,lng:127.38,name:'현재 위치',ephemeral:true}
+  });
+});
+
+test('preserves the default map on GPS failure or unusable coordinates',()=>{
+  for (const coords of [undefined,{latitude:NaN,longitude:127.38},{latitude:36.35,longitude:Infinity}]) {
+    assert.deepEqual(gpsOriginDecision(coords,0,0),{kind:'unavailable'});
+  }
+  assert.deepEqual(gpsOriginDecision({latitude:35.68,longitude:139.69},0,0),{kind:'outside-region'});
+});
+
+test('ignores late GPS success or failure after the departure field changed',()=>{
+  assert.deepEqual(gpsOriginDecision({latitude:36.35,longitude:127.38},0,1),{kind:'ignore'});
+  assert.deepEqual(gpsOriginDecision(undefined,0,1),{kind:'ignore'});
 });
