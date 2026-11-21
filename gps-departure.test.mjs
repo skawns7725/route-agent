@@ -28,7 +28,10 @@ test('GPS accuracy must be 100 m or better',()=>{
   assert.equal(departureCorrection(origin,null),'unavailable');
 });
 
-test('manual departures stay fixed even with the current-location label',()=>{
-  assert.equal(departureCorrection({...origin,ephemeral:false},fixAt(150)),'keep');
-  assert.equal(departureCorrection({...origin,name:'서울시청'},fixAt(150)),'keep');
+test('manual departures use the same distance and accuracy limits',()=>{
+  const manual = {lat:origin.lat,lng:origin.lng,name:'서울시청'};
+  assert.equal(departureCorrection(manual,fixAt(150)),'correct');
+  assert.equal(departureCorrection(manual,fixAt(100)),'keep');
+  assert.equal(departureCorrection(manual,fixAt(150,101)),'unavailable');
+  assert.equal(departureCorrection(manual,null),'unavailable');
 });
