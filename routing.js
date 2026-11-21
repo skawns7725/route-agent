@@ -1,6 +1,6 @@
 import {readRecentSearches,recordRecentSearch,removeRecentSearch,writeRecentSearches} from './recent-searches.mjs';
 import {departureCorrection} from './gps-departure.mjs';
-import {createPlaceLookup} from './place-search.mjs';
+import {createPlaceLookup,matchPresetPlace,routePresets} from './place-search.mjs';
 import {normalizeSavedPlace,readSavedPlaces,savePlace,removePlace,writeSavedPlaces} from './saved-places.mjs';
 
 const labels = {
@@ -877,27 +877,45 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   simulate.addEventListener('click',startSimulation);
   const seoul = find('routeSeoul');
   const ulsan = find('routeUlsan');
-  function searchTrip(origin,destination) {
+  async function searchTrip(preset) {
     for (const waypoint of waypoints) {
       cancelLookup(waypoint);
       waypoint.row.remove();
     }
     waypoints.length = 0;
     updateWaypoints();
-    for (const [id,query] of [['start',origin],['end',destination]]) {
-      const slot = slots[id];
+    const endpoints = [slots.start,slots.end];
+    for (const [index,slot] of endpoints.entries()) {
       cancelLookup(slot);
       slot.history.hidden = true;
       slot.place = null;
-      slot.input.value = query;
+      slot.input.value = preset[index].query;
     }
     clearResults();
-    status.textContent = '출발지와 도착지의 검색 결과를 선택해 주세요.';
-    searchPlace(slots.start);
-    searchPlace(slots.end);
+    const versions = endpoints.map(slot => slot.version);
+    const isCurrent = () => !waypoints.length && endpoints.every((slot,index) => slot.version === versions[index]);
+    status.textContent = '프리셋의 출발지와 도착지를 찾는 중…';
+
+    let places;
+    try {
+      places = await Promise.all(preset.map(async target => matchPresetPlace(await lookup(target.query),target)));
+    } catch (error) {
+      if (isCurrent()) status.textContent = error.message;
+      return;
+    }
+    if (!isCurrent()) return;
+    const missing = places.indexOf(null);
+    if (missing !== -1) {
+      status.textContent = preset[missing].query+'의 정확한 장소를 확인하지 못했어요. 다시 시도하거나 직접 검색해 주세요.';
+      return;
+    }
+
+    changeHistory(entries => places.reduce((history,place) => recordRecentSearch(history,place),entries));
+    endpoints.forEach((slot,index) => choosePlace(slot,places[index],false));
+    return compareTrip();
   }
-  seoul.onclick = ()=>searchTrip('서울시청','서울역');
-  ulsan.onclick = ()=>searchTrip('태화로터리','울산시청');
+  seoul.onclick = ()=>searchTrip(routePresets.seoul);
+  ulsan.onclick = ()=>searchTrip(routePresets.ulsan);
   map.onReady(({sdk:maps}) => {
     sdk = maps;
     lookup = createPlaceLookup(sdk);
