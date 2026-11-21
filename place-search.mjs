@@ -17,6 +17,30 @@ export function createPlaceLookup() {
   return keyword=>fetchPlaces('/api/places',{keyword},'장소를 가져오지 못했어요. 다시 검색해 주세요.');
 }
 
+export const routePresets = {
+  seoul:[
+    {query:'서울시청',names:['서울특별시청','서울시청'],addresses:['서울 중구 세종대로 110']},
+    {query:'서울역',names:['서울역','서울역 경부선(고속철도)'],addresses:['서울 중구 한강대로 405','서울 용산구 한강대로 405']}
+  ],
+  ulsan:[
+    {query:'태화로터리',names:['태화로터리'],addresses:['울산 남구 신정동 1507-5']},
+    {query:'울산시청',names:['울산광역시청','울산시청'],addresses:['울산 남구 중앙로 201']}
+  ]
+};
+
+function normalizePresetAddress(address) {
+  return (address ?? '').trim().replace(/\s+/g,' ')
+    .replace(/^서울특별시 /,'서울 ').replace(/^울산광역시 /,'울산 ');
+}
+
+export function matchPresetPlace(places,{names,addresses}) {
+  const matches = places.filter(place =>
+    names.includes(place.name) && addresses.includes(normalizePresetAddress(place.address)));
+  const [match] = matches;
+  if (match && matches.every(place => place.lat === match.lat && place.lng === match.lng)) return match;
+  return null;
+}
+
 export function createParkingLookup() {
   return async (destination,signal)=>{
     const {lat,lng} = destination ?? {};
