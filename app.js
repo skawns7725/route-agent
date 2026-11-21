@@ -432,3 +432,4 @@ searchMic.onclick = ()=>{
 };
 
 map.connect();
+routing.focusGps({initial:true});

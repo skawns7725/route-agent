@@ -1,5 +1,5 @@
 import {readRecentSearches,recordRecentSearch,removeRecentSearch,writeRecentSearches} from './recent-searches.mjs';
-import {departureCorrection} from './gps-departure.mjs';
+import {departureCorrection,gpsOriginDecision} from './gps-departure.mjs';
 import {createPlaceLookup} from './place-search.mjs';
 import {normalizeSavedPlace,readSavedPlaces,savePlace,removePlace,writeSavedPlaces} from './saved-places.mjs';
 
@@ -161,6 +161,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   let nextWaypointId = 1;
   let lookup, sdk, controller, futureRequest, fastest, selectedRoute = null;
   let gpsPending = false;
+  let initialGpsRequested = false;
   let departureRequest;
   let storage;
   try { storage = window.localStorage; } catch { /* Device storage can be blocked. */ }
@@ -274,6 +275,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
   }
 
   function choosePlace(slot, place, focusMap = true) {
+    if (slot === slots.start) showGpsNotice('');
     cancelLookup(slot);
     if (slot.history) slot.history.hidden = true;
     slot.place = place;
@@ -585,39 +587,64 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     clearResults();
   });
 
-  function focusGps() {
-    openPanel('route');
+  function showGpsNotice(message) {
+    const notice = find('mapGpsStatus');
+    notice.hidden = !message;
+    notice.textContent = message;
+  }
+
+  function focusGps({initial = false} = {}) {
+    if (initial) {
+      if (initialGpsRequested) return;
+      initialGpsRequested = true;
+    } else {
+      openPanel('route');
+      showGpsNotice('');
+    }
     if (gpsPending) return;
     const start = slots.start;
     const useSearch = message => {
       status.textContent = message;
       start.input.focus();
     };
-    if (!navigator.geolocation) {
-      useSearch('현재 위치를 사용할 수 없어요. 출발지를 검색해 주세요.');
-      return;
-    }
     const version = start.version;
+    const geolocation = navigator.geolocation;
     gpsPending = true;
-    gpsButton.disabled = true;
-    status.textContent = '현재 위치 확인 중…';
-    const finish = () => {
+    if (!initial && geolocation) {
+      gpsButton.disabled = true;
+      status.textContent = '현재 위치 확인 중…';
+    }
+    const finish = coords => {
       gpsPending = false;
       gpsButton.disabled = false;
-      return start.version === version;
-    };
-    navigator.geolocation.getCurrentPosition(({coords}) => {
-      if (!finish()) return;
-      const {latitude:lat,longitude:lng} = coords;
-      if (lat<32 || lat>40 || lng<124 || lng>132) {
-        useSearch('국내 경로를 조회할 수 있도록 출발지를 검색해 주세요.');
+      const result = gpsOriginDecision(coords,version,start.version);
+      if (result.kind === 'ignore') return;
+      if (result.kind === 'use') {
+        choosePlace(start,result.place,!initial);
+        if (initial) {
+          const appliedVersion = start.version;
+          map.onReady(()=>{
+            if (start.version === appliedVersion) map.focusPoint(result.place,{immediate:true});
+          });
+        } else slots.end.input.focus();
         return;
       }
-      choosePlace(start,{lat,lng,name:'현재 위치',ephemeral:true});
-      slots.end.input.focus();
-    }, () => {
-      if (finish()) useSearch('현재 위치에 접근할 수 없어요. 장소 이름이나 주소로 출발지를 검색해 주세요.');
-    }, {timeout:10000,maximumAge:0});
+      if (result.kind === 'outside-region') {
+        const message = '국내 경로를 조회할 수 있도록 출발지를 검색해 주세요.';
+        if (initial) showGpsNotice(message);
+        else useSearch(message);
+      } else if (initial) {
+        showGpsNotice('현재 위치를 찾을 수 없어요. 위치 권한을 허용하면 현위치에서 시작해요.');
+      } else useSearch(geolocation
+        ? '현재 위치에 접근할 수 없어요. 장소 이름이나 주소로 출발지를 검색해 주세요.'
+        : '현재 위치를 사용할 수 없어요. 출발지를 검색해 주세요.');
+    };
+    try {
+      if (geolocation) geolocation.getCurrentPosition(({coords})=>finish(coords),()=>finish(),{timeout:10000,maximumAge:0});
+      else finish();
+    } catch {
+      finish();
+    }
   }
 
   async function prepareDeparture() {
@@ -867,7 +894,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     }
   });
 
-  gpsButton.addEventListener('click',focusGps);
+  gpsButton.addEventListener('click',()=>focusGps());
   drive.addEventListener('click',startDrive);
   summaryDrive.addEventListener('click',startDrive);
   summaryDetails.addEventListener('click',() => {
@@ -905,7 +932,7 @@ export function initRouting({map,setRoadRoute,startDrive,startSimulation,openPan
     compare.disabled = false;
     seoul.disabled = false;
     ulsan.disabled = false;
-    if (!gpsPending) status.textContent = '장소를 검색하거나 현재 위치를 출발지로 지정해 주세요.';
+    if (!gpsPending && !slots.start.place) status.textContent = '장소를 검색하거나 현재 위치를 출발지로 지정해 주세요.';
     for (const slot of tripSlots()) if (slot.input.value && !slot.place) searchPlace(slot);
   });
   return {

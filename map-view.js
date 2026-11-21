@@ -463,12 +463,13 @@ export function createMap(preview,{mapType = 'road',traffic = false,onTrafficCha
       icon.textContent = '🚦';
       nextSignalMarker = new sdk.CustomOverlay({map:instance,content:icon,position:latLng(crossing),yAnchor:.5,zIndex:4});
     },
-    focusPoint(point) {
+    focusPoint(point,{immediate = false} = {}) {
       if (!instance || navigationOwner) return;
       followingGps = false;
       chooseMode('live');
       instance.setLevel(4);
-      instance.panTo(latLng(point));
+      if (immediate) instance.setCenter(latLng(point));
+      else instance.panTo(latLng(point));
     },
     focusRoute(points) {
       if (!instance || navigationOwner || !points.length) return;
