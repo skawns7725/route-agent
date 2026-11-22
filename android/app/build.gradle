@@ -1,0 +1,30 @@
+plugins { id "com.android.application" version "8.7.3" }
+android {
+    namespace "kr.gigonggyo.routeagent"
+    compileSdk 35
+    defaultConfig {
+        applicationId "kr.gigonggyo.routeagent"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "0.1"
+    }
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir("generated/demoAssets"))
+}
+def demoAssets = tasks.register("prepareDemoAssets") {
+    def source = rootProject.file("../route-agent-demo.html")
+    def output = layout.buildDirectory.file("generated/demoAssets/conversation.html")
+    inputs.file(source)
+    outputs.file(output)
+    doLast {
+        def html = source.getText("UTF-8")
+        def cutoff = html.lastIndexOf("</script><script>")
+        if (cutoff < 0) throw new GradleException("Cannot locate the web map script")
+        html = html.substring(0, cutoff) + "</script></html>"
+        html = html.replace('<section class="atlas">', '<section class="atlas" style="display:none">')
+        output.get().asFile.parentFile.mkdirs()
+        output.get().asFile.setText(html, "UTF-8")
+    }
+}
+tasks.named("preBuild").configure { dependsOn(demoAssets) }
+dependencies { implementation "com.kakao.maps.open:android:2.15.2" }
